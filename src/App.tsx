@@ -157,9 +157,14 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#050B14] via-[#0B132B] to-[#1C2541] text-white font-sans antialiased pb-28 relative overflow-x-hidden selection:bg-cyan-500 selection:text-black">
+    <div className="min-h-screen bg-gradient-to-br from-[#0B132B] via-[#1C2541] to-[#3A506B] text-white font-sans antialiased pb-28 relative overflow-x-hidden selection:bg-cyan-500 selection:text-black">
+      {/* DECORATIVE GLOW ORBS */}
+      <div className="fixed top-[-10%] left-[-15%] w-[400px] h-[400px] rounded-full bg-cyan-500/10 blur-[120px] pointer-events-none" />
+      <div className="fixed top-[30%] right-[-10%] w-[350px] h-[350px] rounded-full bg-blue-500/10 blur-[100px] pointer-events-none" />
+      <div className="fixed bottom-[-5%] left-[20%] w-[300px] h-[300px] rounded-full bg-indigo-500/8 blur-[110px] pointer-events-none" />
+
       {/* HEADER */}
-      <header className="sticky top-0 z-40 backdrop-blur-2xl bg-[#050B14]/70 border-b border-white/10 px-4 py-3">
+      <header className="sticky top-0 z-40 backdrop-blur-2xl bg-white/10 border-b border-white/15 px-4 py-3 shadow-lg shadow-black/10">
         <div className="flex items-center justify-between max-w-md mx-auto">
           <div className="flex items-center space-x-2.5">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-400 via-blue-500 to-indigo-600 flex items-center justify-center font-black text-lg shadow-lg shadow-cyan-500/30 border border-white/20">
@@ -175,7 +180,7 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center space-x-2">
-            <button className="p-2 rounded-full bg-white/5 border border-white/10 text-slate-300 hover:text-cyan-400 hover:bg-cyan-500/10 transition-all active:scale-95">
+            <button className="p-2 rounded-full bg-white/10 border border-white/15 text-slate-200 hover:text-cyan-400 hover:bg-cyan-500/15 transition-all active:scale-95 backdrop-blur-xl">
               <Bell className="w-4 h-4" />
             </button>
             <button
@@ -255,7 +260,7 @@ export default function App() {
       )}
 
       {/* BOTTOM NAV */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 backdrop-blur-2xl bg-[#050B14]/80 border-t border-white/10 py-2.5">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 backdrop-blur-2xl bg-white/10 border-t border-white/15 py-2.5 shadow-lg shadow-black/20">
         <div className="max-w-md mx-auto flex justify-around items-center">
           {[
             { id: 'home', label: 'Ana Ekran', icon: Home },
@@ -308,7 +313,7 @@ function HomeTab({
           {companies.map((item, idx) => (
             <div key={item.id} className="flex-shrink-0 flex flex-col items-center space-y-1 cursor-pointer group">
               <div className={`w-16 h-16 rounded-full p-[2px] bg-gradient-to-tr from-cyan-400 via-blue-500 to-indigo-600 shadow-md group-hover:scale-105 transition-transform ${idx === 0 ? 'animate-pulse-glow' : ''}`}>
-                <div className="w-full h-full rounded-full bg-[#050B14]/90 backdrop-blur-md border border-white/20 flex items-center justify-center text-[11px] font-semibold text-center px-1 leading-tight">
+                <div className="w-full h-full rounded-full bg-white/15 backdrop-blur-xl border border-white/20 flex items-center justify-center text-[11px] font-semibold text-center px-1 leading-tight">
                   {item.name}
                 </div>
               </div>
@@ -327,12 +332,12 @@ function HomeTab({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Vakansiya, şəhər və ya vəzifə axtar..."
-            className="w-full bg-white/[0.07] border border-white/15 rounded-2xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-slate-400 backdrop-blur-2xl focus:outline-none focus:border-cyan-400/80 transition-all"
+            className="w-full bg-white/10 border border-white/15 rounded-2xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-slate-300 backdrop-blur-2xl focus:outline-none focus:border-cyan-400/80 transition-all"
           />
         </div>
         <button
           onClick={() => setShowFilterModal(true)}
-          className="p-2.5 rounded-2xl bg-cyan-500/20 border border-cyan-400/40 backdrop-blur-2xl text-cyan-300 hover:bg-cyan-500/30 active:scale-95 transition-all shadow-lg shadow-cyan-500/10"
+          className="p-2.5 rounded-2xl bg-cyan-500/20 border border-cyan-400/40 backdrop-blur-2xl text-cyan-200 hover:bg-cyan-500/30 active:scale-95 transition-all shadow-lg shadow-cyan-500/15"
         >
           <SlidersHorizontal className="w-4 h-4" />
         </button>
@@ -343,7 +348,7 @@ function HomeTab({
         {loading ? (
           <div className="space-y-4">
             {[1, 2].map((i) => (
-              <div key={i} className="rounded-3xl bg-white/[0.07] border border-white/10 p-5 space-y-3 animate-pulse">
+              <div key={i} className="rounded-3xl bg-white/10 border border-white/15 backdrop-blur-2xl p-5 space-y-3 animate-pulse">
                 <div className="h-6 w-32 bg-white/10 rounded-lg" />
                 <div className="h-4 w-48 bg-white/10 rounded" />
                 <div className="h-3 w-24 bg-white/5 rounded" />
@@ -388,7 +393,7 @@ function FeedCard({
   const companyName = item.company?.name || '';
   return (
     <div
-      className="relative rounded-3xl bg-white/[0.06] border border-white/15 backdrop-blur-3xl p-5 space-y-4 shadow-2xl hover:border-cyan-400/30 transition-all group animate-fade-in-up"
+      className="relative rounded-3xl bg-white/10 border border-white/15 backdrop-blur-2xl p-5 space-y-4 shadow-xl shadow-black/10 hover:border-cyan-400/30 hover:bg-white/[0.12] transition-all group animate-fade-in-up"
       style={{ animationDelay: `${index * 0.08}s` }}
     >
       {item.is_vip && (
@@ -424,10 +429,10 @@ function FeedCard({
 
       {item.type === 'vacancy' && (
         <div className="flex flex-wrap gap-2 text-[11px] text-slate-200 pt-1">
-          <span className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/10 border border-white/10 font-medium">
+          <span className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/10 border border-white/15 backdrop-blur-xl font-medium">
             <Clock className="w-3 h-3" /> {item.duration}
           </span>
-          <span className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/10 border border-white/10 font-medium">
+          <span className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/10 border border-white/15 backdrop-blur-xl font-medium">
             <MapPin className="w-3 h-3" /> {item.location}
           </span>
         </div>
@@ -453,13 +458,13 @@ function FeedCard({
               <span>Yeni Vakansiya</span>
             </button>
           )}
-          <button className="p-2.5 rounded-xl bg-white/10 border border-white/15 hover:bg-white/20 text-slate-200 transition-all">
+          <button className="p-2.5 rounded-xl bg-white/10 border border-white/15 backdrop-blur-xl hover:bg-white/20 text-slate-200 transition-all">
             <Phone className="w-4 h-4 text-cyan-400" />
           </button>
         </div>
         <button
           onClick={onToggleFavorite}
-          className={`p-2.5 rounded-xl border transition-all ${
+          className={`p-2.5 rounded-xl border backdrop-blur-xl transition-all ${
             isFavorite
               ? 'bg-rose-500/20 border-rose-500/40 text-rose-400'
               : 'bg-white/10 border-white/15 text-slate-200 hover:text-rose-400'
@@ -536,7 +541,7 @@ function MessagesTab({
     return (
       <div className="space-y-3 pt-2 animate-fade-in-up">
         <div className="flex items-center space-x-3 pb-3 border-b border-white/10">
-          <button onClick={() => setSelectedChat(null)} className="p-1.5 rounded-full bg-white/5 border border-white/10 text-slate-300 hover:text-white hover:bg-white/10 transition-all">
+          <button onClick={() => setSelectedChat(null)} className="p-1.5 rounded-full bg-white/10 border border-white/15 backdrop-blur-xl text-slate-200 hover:text-white hover:bg-white/20 transition-all">
             <X className="w-4 h-4" />
           </button>
           <div className="w-10 h-10 rounded-full bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center font-bold text-cyan-300">
@@ -548,7 +553,7 @@ function MessagesTab({
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Aktiv
             </p>
           </div>
-          <button className="p-2 rounded-full bg-white/5 border border-white/10 text-cyan-400 hover:bg-cyan-500/10 transition-all">
+          <button className="p-2 rounded-full bg-white/10 border border-white/15 backdrop-blur-xl text-cyan-400 hover:bg-cyan-500/15 transition-all">
             <Phone className="w-4 h-4" />
           </button>
         </div>
@@ -559,7 +564,7 @@ function MessagesTab({
               <div className={`max-w-[80%] px-3.5 py-2.5 rounded-2xl text-xs leading-relaxed ${
                 msg.from === 'me'
                   ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-br-md'
-                  : 'bg-white/10 border border-white/10 text-slate-200 rounded-bl-md'
+                  : 'bg-white/10 border border-white/15 backdrop-blur-xl text-slate-200 rounded-bl-md'
               }`}>
                 {msg.text}
                 <span className="block text-[9px] text-slate-400 mt-1 text-right">{msg.time}</span>
@@ -569,7 +574,7 @@ function MessagesTab({
         </div>
 
         <div className="fixed bottom-16 left-0 right-0 px-3">
-          <div className="max-w-md mx-auto flex items-center space-x-2 bg-white/[0.08] border border-white/15 rounded-2xl p-1.5 backdrop-blur-2xl">
+          <div className="max-w-md mx-auto flex items-center space-x-2 bg-white/10 border border-white/15 rounded-2xl p-1.5 backdrop-blur-2xl shadow-lg shadow-black/10">
             <input
               type="text"
               value={chatInput}
@@ -600,14 +605,14 @@ function MessagesTab({
         <button
           key={conv.id}
           onClick={() => setSelectedChat(conv.id)}
-          className="w-full flex items-center space-x-3 p-3.5 rounded-2xl bg-white/[0.06] border border-white/10 hover:bg-white/[0.1] hover:border-cyan-400/20 transition-all text-left active:scale-[0.98]"
+          className="w-full flex items-center space-x-3 p-3.5 rounded-2xl bg-white/10 border border-white/15 backdrop-blur-2xl hover:bg-white/[0.15] hover:border-cyan-400/25 transition-all text-left active:scale-[0.98] shadow-lg shadow-black/5"
         >
           <div className="relative flex-shrink-0">
             <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-cyan-500 via-blue-600 to-indigo-600 flex items-center justify-center text-sm font-bold border border-white/20">
               {conv.name.slice(0, 2).toUpperCase()}
             </div>
             {conv.unread > 0 && (
-              <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center border-2 border-[#050B14]">
+              <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center border-2 border-[#1C2541]">
                 {conv.unread}
               </span>
             )}
@@ -672,7 +677,7 @@ function ProfileTab({
   return (
     <div className="space-y-4 pt-2">
       {/* Profile Header Card */}
-      <div className="rounded-3xl bg-gradient-to-br from-white/[0.1] to-white/[0.04] border border-white/15 p-5 space-y-4 backdrop-blur-2xl shadow-2xl">
+      <div className="rounded-3xl bg-white/10 border border-white/15 p-5 space-y-4 backdrop-blur-2xl shadow-xl shadow-black/10">
         <div className="flex items-center space-x-4">
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-cyan-500 via-blue-600 to-indigo-600 flex items-center justify-center text-2xl font-black border border-white/20 shadow-lg">
             {role === 'jobseeker' ? 'İA' : 'ŞP'}
@@ -708,21 +713,21 @@ function ProfileTab({
       </div>
 
       {/* Post Creator */}
-      <div className="rounded-3xl bg-white/[0.06] border border-white/15 backdrop-blur-3xl p-4 space-y-3 shadow-2xl">
-        <span className="text-xs font-bold text-cyan-300">Yeni Post / Məqalə Paylaş</span>
+      <div className="rounded-3xl bg-white/10 border border-white/15 backdrop-blur-2xl p-4 space-y-3 shadow-xl shadow-black/10">
+        <span className="text-xs font-bold text-cyan-200">Yeni Post / Məqalə Paylaş</span>
         <textarea
           rows={3}
           placeholder="Bu gün hansı uğurunuzu və ya sertifikatınızı paylaşmaq istəyirsiniz?"
           value={postText}
           onChange={(e) => setPostText(e.target.value)}
-          className="w-full bg-white/5 border border-white/10 rounded-2xl p-3 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-cyan-400 transition-all resize-none"
+          className="w-full bg-white/10 border border-white/15 rounded-2xl p-3 text-xs text-white placeholder-slate-300 focus:outline-none focus:border-cyan-400 transition-all resize-none backdrop-blur-xl"
         />
         <div className="flex justify-between items-center pt-1">
           <div className="flex space-x-2">
-            <button className="p-2 rounded-xl bg-white/10 border border-white/10 text-cyan-400 hover:bg-white/20 transition-all">
+            <button className="p-2 rounded-xl bg-white/10 border border-white/15 backdrop-blur-xl text-cyan-400 hover:bg-white/20 transition-all">
               <ImageIcon className="w-4 h-4" />
             </button>
-            <button className="p-2 rounded-xl bg-white/10 border border-white/10 text-cyan-400 hover:bg-white/20 transition-all">
+            <button className="p-2 rounded-xl bg-white/10 border border-white/15 backdrop-blur-xl text-cyan-400 hover:bg-white/20 transition-all">
               <Paperclip className="w-4 h-4" />
             </button>
           </div>
@@ -733,7 +738,7 @@ function ProfileTab({
       </div>
 
       {/* Multi CV Uploader */}
-      <div className="rounded-3xl bg-white/[0.06] border border-white/15 backdrop-blur-3xl p-4 space-y-3 shadow-2xl">
+      <div className="rounded-3xl bg-white/10 border border-white/15 backdrop-blur-2xl p-4 space-y-3 shadow-xl shadow-black/10">
         <div className="flex justify-between items-center">
           <span className="text-xs font-bold text-white">Mənim CV-lərim (Maks 5 ədəd)</span>
           <span className="text-[10px] text-cyan-300 font-semibold bg-cyan-500/10 px-2 py-0.5 rounded-lg border border-cyan-500/20">
@@ -742,7 +747,7 @@ function ProfileTab({
         </div>
         <div className="space-y-2">
           {cvFiles.map((file) => (
-            <div key={file.name} className="flex items-center justify-between bg-white/5 border border-white/10 p-2.5 rounded-2xl text-xs">
+            <div key={file.name} className="flex items-center justify-between bg-white/10 border border-white/15 backdrop-blur-xl p-2.5 rounded-2xl text-xs">
               <div className="flex items-center space-x-2">
                 <FileText className="w-4 h-4 text-cyan-400" />
                 <span>{file.name}</span>
@@ -766,7 +771,7 @@ function ProfileTab({
         <button
           onClick={handleAddCv}
           disabled={cvFiles.length >= 5}
-          className="w-full py-2.5 rounded-2xl bg-white/10 border border-dashed border-white/20 text-xs font-semibold text-slate-300 hover:bg-white/15 transition-all flex items-center justify-center space-x-2 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="w-full py-2.5 rounded-2xl bg-white/10 border border-dashed border-white/25 backdrop-blur-xl text-xs font-semibold text-slate-200 hover:bg-white/15 transition-all flex items-center justify-center space-x-2 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <PlusCircle className="w-4 h-4 text-cyan-400" />
           <span>Yeni CV / Sertifikat Yüklə</span>
@@ -774,7 +779,7 @@ function ProfileTab({
       </div>
 
       {/* Role Switch Card */}
-      <div className="rounded-2xl bg-white/[0.06] border border-white/10 p-4 space-y-2 backdrop-blur-xl">
+      <div className="rounded-2xl bg-white/10 border border-white/15 p-4 space-y-2 backdrop-blur-2xl shadow-lg shadow-black/5">
         <div className="flex items-center space-x-2 pb-1">
           <Globe className="w-4 h-4 text-cyan-400" />
           <p className="text-xs font-bold text-slate-200 tracking-wide">Rejim Dəyişdir</p>
@@ -800,17 +805,17 @@ function ProfileTab({
       </div>
 
       {/* Menu Items */}
-      <div className="rounded-2xl bg-white/[0.06] border border-white/10 overflow-hidden backdrop-blur-xl">
+      <div className="rounded-2xl bg-white/10 border border-white/15 overflow-hidden backdrop-blur-2xl shadow-lg shadow-black/5">
         {menuItems.map((item, i) => {
           const Icon = item.icon;
           return (
             <button
               key={i}
-              className={`w-full flex items-center space-x-3 p-4 hover:bg-white/[0.05] transition-all text-left ${
-                i < menuItems.length - 1 ? 'border-b border-white/5' : ''
+              className={`w-full flex items-center space-x-3 p-4 hover:bg-white/[0.08] transition-all text-left ${
+                i < menuItems.length - 1 ? 'border-b border-white/10' : ''
               }`}
             >
-              <div className="w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-400/20 flex items-center justify-center text-cyan-400">
+              <div className="w-9 h-9 rounded-xl bg-cyan-500/15 border border-cyan-400/25 flex items-center justify-center text-cyan-300">
                 <Icon className="w-4 h-4" />
               </div>
               <div className="flex-1">
@@ -824,9 +829,9 @@ function ProfileTab({
       </div>
 
       {/* Settings & Logout */}
-      <div className="rounded-2xl bg-white/[0.06] border border-white/10 overflow-hidden backdrop-blur-xl">
-        <button className="w-full flex items-center space-x-3 p-4 hover:bg-white/[0.05] transition-all text-left border-b border-white/5">
-          <div className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-300">
+      <div className="rounded-2xl bg-white/10 border border-white/15 overflow-hidden backdrop-blur-2xl shadow-lg shadow-black/5">
+        <button className="w-full flex items-center space-x-3 p-4 hover:bg-white/[0.08] transition-all text-left border-b border-white/10">
+          <div className="w-9 h-9 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center text-slate-200">
             <Settings className="w-4 h-4" />
           </div>
           <p className="text-sm font-semibold text-white flex-1">Tənzimləmələr</p>
@@ -847,7 +852,7 @@ function ProfileTab({
 
 function StatBox({ icon: Icon, value, label }: { icon: React.ElementType; value: number | string; label: string }) {
   return (
-    <div className="rounded-xl bg-white/[0.05] border border-white/10 p-2.5 text-center space-y-1">
+    <div className="rounded-xl bg-white/10 border border-white/15 backdrop-blur-xl p-2.5 text-center space-y-1">
       <Icon className="w-4 h-4 text-cyan-400 mx-auto" />
       <p className="text-base font-extrabold text-white">{value}</p>
       <p className="text-[9px] text-slate-400 font-medium uppercase tracking-wider">{label}</p>
@@ -889,9 +894,9 @@ function FilterModal({
   setSalaryRange: (v: number) => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-2xl flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="w-full max-w-md bg-[#0B132B] border border-white/20 rounded-t-3xl sm:rounded-3xl p-6 space-y-5 max-h-[85vh] overflow-y-auto shadow-2xl animate-slide-up">
-        <div className="flex justify-between items-center border-b border-white/10 pb-3">
+    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-2xl flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="w-full max-w-md bg-white/10 border border-white/20 rounded-t-3xl sm:rounded-3xl p-6 space-y-5 max-h-[85vh] overflow-y-auto shadow-2xl shadow-black/30 backdrop-blur-2xl animate-slide-up">
+        <div className="flex justify-between items-center border-b border-white/15 pb-3">
           <h3 className="text-base font-bold text-white tracking-wide">BVM Filtrlər Və Sıralama</h3>
           <button onClick={onClose} className="p-1 text-slate-400 hover:text-white transition-all">
             <X className="w-5 h-5" />
@@ -913,8 +918,8 @@ function FilterModal({
               <button
                 key={sort.id}
                 onClick={() => setSortBy(sort.id)}
-                className={`py-2 text-xs rounded-xl border font-semibold transition-all ${
-                  sortBy === sort.id ? 'bg-cyan-500/25 border-cyan-400 text-cyan-300' : 'bg-white/5 border-white/10 text-slate-400'
+                className={`py-2 text-xs rounded-xl border backdrop-blur-xl font-semibold transition-all ${
+                  sortBy === sort.id ? 'bg-cyan-500/25 border-cyan-400 text-cyan-200' : 'bg-white/10 border-white/15 text-slate-300'
                 }`}
               >
                 {sort.label}
@@ -933,8 +938,8 @@ function FilterModal({
                 <button
                   key={type}
                   onClick={() => toggleWorkType(type)}
-                  className={`px-3 py-1.5 text-xs rounded-xl border transition-all flex items-center space-x-1 ${
-                    isSelected ? 'bg-cyan-500/25 border-cyan-400 text-cyan-300 font-bold' : 'bg-white/5 border-white/10 text-slate-400'
+                  className={`px-3 py-1.5 text-xs rounded-xl border backdrop-blur-xl transition-all flex items-center space-x-1 ${
+                    isSelected ? 'bg-cyan-500/25 border-cyan-400 text-cyan-200 font-bold' : 'bg-white/10 border-white/15 text-slate-300'
                   }`}
                 >
                   {isSelected && <Check className="w-3 h-3" />}
@@ -972,8 +977,8 @@ function FilterModal({
               <button
                 key={unit}
                 onClick={() => setExperienceUnit(unit)}
-                className={`flex-1 py-1.5 text-xs rounded-xl border capitalize font-medium transition-all ${
-                  experienceUnit === unit ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 shadow-sm' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'
+                className={`flex-1 py-1.5 text-xs rounded-xl border capitalize font-medium transition-all backdrop-blur-xl ${
+                  experienceUnit === unit ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200 shadow-sm' : 'bg-white/10 border-white/15 text-slate-300 hover:bg-white/15'
                 }`}
               >
                 {unit}
@@ -1003,7 +1008,7 @@ function FilterModal({
             placeholder="Məs: Həftəsonu, Layihə əsaslı..."
             value={customWorkType}
             onChange={(e) => setCustomWorkType(e.target.value)}
-            className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 transition-all"
+            className="w-full bg-white/10 border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-400 backdrop-blur-xl focus:outline-none focus:border-cyan-400 transition-all"
           />
         </div>
 
@@ -1015,8 +1020,8 @@ function FilterModal({
               <button
                 key={lang}
                 onClick={() => setCvLanguage(lang)}
-                className={`flex-1 py-1.5 text-xs rounded-xl border font-bold transition-all ${
-                  cvLanguage === lang ? 'bg-cyan-500/25 border-cyan-400 text-cyan-300' : 'bg-white/5 border-white/10 text-slate-400'
+                className={`flex-1 py-1.5 text-xs rounded-xl border font-bold transition-all backdrop-blur-xl ${
+                  cvLanguage === lang ? 'bg-cyan-500/25 border-cyan-400 text-cyan-200' : 'bg-white/10 border-white/15 text-slate-300'
                 }`}
               >
                 {lang}
