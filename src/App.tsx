@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
 import {
   Home, Heart, MessageSquare, User, Search, SlidersHorizontal,
   Send, Phone, FileText, CheckCircle2, Building2,
   Briefcase, PlusCircle, X, Globe, Eye, MapPin, Clock, Bookmark,
   Bell, Settings, LogOut, Star, TrendingUp, Award, Mail,
-  ArrowUpDown, Image as ImageIcon, Paperclip, Check,
+  ArrowUpDown, Image as ImageIcon, Paperclip, Check, Loader2,
 } from 'lucide-react';
 import { supabase, type Company, type Vacancy, type Article, type FeedItem } from './lib/supabase';
+import { AuthModal } from './components/AuthModal';
 
 type SortBy = 'newest' | 'salary' | 'alphabetical';
 
@@ -14,6 +16,9 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('home');
   const [role, setRole] = useState<'jobseeker' | 'employer'>('jobseeker');
   const [showFilterModal, setShowFilterModal] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [user, setUser] = useState<SupabaseUser | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,6 +64,17 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('bvm_favorites', JSON.stringify(favorites));
   }, [favorites]);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setUser(data.session?.user ?? null);
+      setAuthLoading(false);
+    });
+    const { data: authData } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => authData.subscription.unsubscribe();
+  }, []);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -233,6 +249,9 @@ export default function App() {
             cvFiles={cvFiles}
             setCvFiles={setCvFiles}
             handleAddCv={handleAddCv}
+            user={user}
+            authLoading={authLoading}
+            onShowAuth={() => setShowAuthModal(true)}
           />
         )}
       </main>
@@ -257,6 +276,11 @@ export default function App() {
           salaryRange={salaryRange}
           setSalaryRange={setSalaryRange}
         />
+      )}
+
+      {/* AUTH MODAL */}
+      {showAuthModal && (
+        <AuthModal onClose={() => setShowAuthModal(false)} />
       )}
 
       {/* BOTTOM NAV */}
@@ -636,6 +660,7 @@ function MessagesTab({
 
 function ProfileTab({
   role, setRole, postText, setPostText, cvFiles, setCvFiles, handleAddCv,
+  user, authLoading, onShowAuth,
 }: {
   role: 'jobseeker' | 'employer';
   setRole: (r: 'jobseeker' | 'employer') => void;
@@ -644,6 +669,9 @@ function ProfileTab({
   cvFiles: { name: string; lang: string }[];
   setCvFiles: (v: { name: string; lang: string }[]) => void;
   handleAddCv: () => void;
+  user: SupabaseUser | null;
+  authLoading: boolean;
+  onShowAuth: () => void;
 }) {
   const [stats, setStats] = useState({ applied: 12, saved: 0, viewed: 48 });
 
@@ -684,14 +712,22 @@ function ProfileTab({
           </div>
           <div className="flex-1">
             <h2 className="text-lg font-bold tracking-tight">
-              {role === 'jobseeker' ? 'İş Axtaran İstifadəçi' : 'Şirkət Profili'}
+              {user ? (user.user_metadata?.full_name || user.email || 'İstifadəçi') : (role === 'jobseeker' ? 'İş Axtaran İstifadəçi' : 'Şirkət Profili')}
             </h2>
             <p className="text-xs text-slate-400">
-              {role === 'jobseeker' ? 'email@example.com' : 'sirket@example.com'}
+              {user ? user.email : (role === 'jobseeker' ? 'email@example.com' : 'sirket@example.com')}
             </p>
             <div className="flex items-center gap-1.5 mt-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="text-[10px] text-emerald-400 font-semibold">Təsdiqlənmiş Profil</span>
+              {user ? (
+                <>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className="text-[10px] text-emerald-400 font-semibold">Təsdiqlənmiş Profil</span>
+                </>
+              ) : (
+                <button onClick={onShowAuth} className="text-[10px] text-cyan-300 font-semibold hover:text-cyan-200 transition-all">
+                  Daxil ol / Qeydiyyat →
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -837,11 +873,20 @@ function ProfileTab({
           <p className="text-sm font-semibold text-white flex-1">Tənzimləmələr</p>
           <ChevronRight />
         </button>
-        <button className="w-full flex items-center space-x-3 p-4 hover:bg-rose-500/5 transition-all text-left">
+        <button
+          onClick={async () => {
+            if (user) {
+              await supabase.auth.signOut();
+            } else {
+              onShowAuth();
+            }
+          }}
+          className="w-full flex items-center space-x-3 p-4 hover:bg-rose-500/5 transition-all text-left"
+        >
           <div className="w-9 h-9 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
-            <LogOut className="w-4 h-4" />
+            {authLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogOut className="w-4 h-4" />}
           </div>
-          <p className="text-sm font-semibold text-rose-400 flex-1">Çıxış</p>
+          <p className="text-sm font-semibold text-rose-400 flex-1">{user ? 'Çıxış' : 'Daxil Ol / Qeydiyyat'}</p>
         </button>
       </div>
 
