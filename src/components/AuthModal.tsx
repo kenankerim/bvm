@@ -1,8 +1,29 @@
 import { useState } from 'react';
 import { X, Mail, Lock, Eye, EyeOff, Loader2, ArrowRight } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import {
+  firebaseAuth,
+  googleProvider,
+  appleProvider,
+  microsoftProvider,
+  linkedInProvider,
+  lineProvider,
+} from '@/lib/firebase';
+import {
+  signInWithPopup,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  type AuthProvider,
+} from 'firebase/auth';
 
 type Provider = 'google' | 'apple' | 'azure' | 'linkedin' | 'line';
+
+const providerMap: Record<Provider, AuthProvider> = {
+  google: googleProvider,
+  apple: appleProvider,
+  azure: microsoftProvider,
+  linkedin: linkedInProvider,
+  line: lineProvider,
+};
 
 const providerLabels: Record<Provider, string> = {
   google: 'Google ilə daxil ol',
@@ -95,16 +116,19 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
     setAuthError(null);
     setBusyProvider(provider);
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: { redirectTo: window.location.origin },
-      });
-      if (error) {
-        setAuthError(error.message);
-        setBusyProvider(null);
+      await signInWithPopup(firebaseAuth, providerMap[provider]);
+      onClose();
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code ?? '';
+      if (code === 'auth/popup-closed-by-user') {
+        setAuthError('Pəncərə bağlandı. Yenidən cəhd edin.');
+      } else if (code === 'auth/popup-blocked') {
+        setAuthError('Pop-up bloklandı. Brauzer ayarlarını yoxlayın.');
+      } else if (code === 'auth/cancelled-popup-request') {
+        // user clicked another provider — ignore
+      } else {
+        setAuthError('Giriş xətası baş verdi. Bir az sonra yenidən cəhd edin.');
       }
-    } catch {
-      setAuthError('Bağlantı xətası baş verdi. Bir az sonra yenidən cəhd edin.');
       setBusyProvider(null);
     }
   };
@@ -117,16 +141,25 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
     }
     setBusy(true);
     try {
-      const { error } = mode === 'login'
-        ? await supabase.auth.signInWithPassword({ email, password })
-        : await supabase.auth.signUp({ email, password });
-      if (error) {
-        setAuthError(error.message);
+      if (mode === 'login') {
+        await signInWithEmailAndPassword(firebaseAuth, email, password);
       } else {
-        onClose();
+        await createUserWithEmailAndPassword(firebaseAuth, email, password);
       }
-    } catch {
-      setAuthError('Bağlantı xətası baş verdi.');
+      onClose();
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code ?? '';
+      if (code === 'auth/invalid-credential' || code === 'auth/wrong-password') {
+        setAuthError('E-poçt və ya şifrə yanlışdır.');
+      } else if (code === 'auth/email-already-in-use') {
+        setAuthError('Bu e-poçt artıq istifadə olunur.');
+      } else if (code === 'auth/weak-password') {
+        setAuthError('Şifrə çox zəifdir. Ən azı 6 simvol istifadə edin.');
+      } else if (code === 'auth/invalid-email') {
+        setAuthError('Yanlış e-poçt formatı.');
+      } else {
+        setAuthError('Giriş xətası baş verdi.');
+      }
     } finally {
       setBusy(false);
     }

@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { User as SupabaseUser } from '@supabase/supabase-js';
 import {
   Home, Heart, MessageSquare, User, Search, SlidersHorizontal,
   Send, Phone, FileText, CheckCircle2, Building2,
@@ -8,6 +7,8 @@ import {
   ArrowUpDown, Image as ImageIcon, Paperclip, Check, Loader2,
 } from 'lucide-react';
 import { supabase, type Company, type Vacancy, type Article, type FeedItem } from './lib/supabase';
+import { firebaseAuth, type FirebaseUser } from './lib/firebase';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { AuthModal } from './components/AuthModal';
 
 type SortBy = 'newest' | 'salary' | 'alphabetical';
@@ -17,7 +18,7 @@ export default function App() {
   const [role, setRole] = useState<'jobseeker' | 'employer'>('jobseeker');
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [user, setUser] = useState<SupabaseUser | null>(null);
+  const [user, setUser] = useState<FirebaseUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
@@ -66,14 +67,11 @@ export default function App() {
   }, [favorites]);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setUser(data.session?.user ?? null);
+    const unsub = onAuthStateChanged(firebaseAuth, (fbUser) => {
+      setUser(fbUser);
       setAuthLoading(false);
     });
-    const { data: authData } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
-    return () => authData.subscription.unsubscribe();
+    return () => unsub();
   }, []);
 
   const fetchData = useCallback(async () => {
@@ -669,7 +667,7 @@ function ProfileTab({
   cvFiles: { name: string; lang: string }[];
   setCvFiles: (v: { name: string; lang: string }[]) => void;
   handleAddCv: () => void;
-  user: SupabaseUser | null;
+  user: FirebaseUser | null;
   authLoading: boolean;
   onShowAuth: () => void;
 }) {
@@ -712,7 +710,7 @@ function ProfileTab({
           </div>
           <div className="flex-1">
             <h2 className="text-lg font-bold tracking-tight">
-              {user ? (user.user_metadata?.full_name || user.email || 'İstifadəçi') : (role === 'jobseeker' ? 'İş Axtaran İstifadəçi' : 'Şirkət Profili')}
+              {user ? (user.displayName || user.email || 'İstifadəçi') : (role === 'jobseeker' ? 'İş Axtaran İstifadəçi' : 'Şirkət Profili')}
             </h2>
             <p className="text-xs text-slate-400">
               {user ? user.email : (role === 'jobseeker' ? 'email@example.com' : 'sirket@example.com')}
@@ -876,7 +874,7 @@ function ProfileTab({
         <button
           onClick={async () => {
             if (user) {
-              await supabase.auth.signOut();
+              await signOut(firebaseAuth);
             } else {
               onShowAuth();
             }
