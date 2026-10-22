@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Mail, Lock, Eye, EyeOff, Loader2, ArrowRight } from 'lucide-react';
+import { X, Mail, Lock, Eye, EyeOff, Loader2, ArrowRight, User } from 'lucide-react';
 import {
   firebaseAuth,
   googleProvider,
@@ -10,8 +10,11 @@ import {
 } from '@/lib/firebase';
 import {
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  updateProfile,
   type AuthProvider,
 } from 'firebase/auth';
 
@@ -46,7 +49,7 @@ function GoogleIcon() {
 
 function AppleIcon() {
   return (
-    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor" className2="text-white">
+    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
       <path d="M17.05 12.04c-.03-2.66 2.17-3.94 2.27-4-1.24-1.81-3.17-2.06-3.85-2.08-1.64-.17-3.2.97-4.03.97-.84 0-2.12-.94-3.49-.92-1.79.03-3.45 1.04-4.37 2.65-1.86 3.23-.47 8.01 1.34 10.63.88 1.28 1.93 2.72 3.3 2.67 1.33-.05 1.83-.86 3.43-.86 1.6 0 2.06.86 3.46.83 1.43-.03 2.34-1.31 3.21-2.6 1.01-1.49 1.43-2.93 1.45-3-.03-.02-2.78-1.07-2.81-4.25ZM14.62 4.44c.73-.89 1.22-2.11 1.09-3.34-1.05.04-2.33.7-3.08 1.58-.67.78-1.26 2.04-1.1 3.24 1.17.09 2.37-.59 3.09-1.48Z"/>
     </svg>
   );
@@ -105,9 +108,12 @@ const providerIconColors: Record<Provider, string> = {
 
 export function AuthModal({ onClose }: { onClose: () => void }) {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [busyProvider, setBusyProvider] = useState<string | null>(null);
@@ -116,7 +122,20 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
     setAuthError(null);
     setBusyProvider(provider);
     try {
-      await signInWithPopup(firebaseAuth, providerMap[provider]);
+      try {
+        await signInWithPopup(firebaseAuth, providerMap[provider]);
+      } catch (popupErr: unknown) {
+        const popupCode = (popupErr as { code?: string })?.code ?? '';
+        if (
+          popupCode === 'auth/popup-blocked' ||
+          popupCode === 'auth/cannot-create-credential-guarantee' ||
+          popupCode === 'auth/operation-not-supported-in-this-environment'
+        ) {
+          await signInWithRedirect(firebaseAuth, providerMap[provider]);
+        } else {
+          throw popupErr;
+        }
+      }
       onClose();
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code ?? '';
@@ -139,12 +158,23 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
       setAuthError('E-poçt və şifrə tələb olunur.');
       return;
     }
+    if (mode === 'signup') {
+      if (!fullName.trim()) {
+        setAuthError('Ad və soyad tələb olunur.');
+        return;
+      }
+      if (password !== confirmPassword) {
+        setAuthError('Şifrələr üst-üstə düşmür.');
+        return;
+      }
+    }
     setBusy(true);
     try {
       if (mode === 'login') {
         await signInWithEmailAndPassword(firebaseAuth, email, password);
       } else {
-        await createUserWithEmailAndPassword(firebaseAuth, email, password);
+        const cred = await createUserWithEmailAndPassword(firebaseAuth, email, password);
+        await updateProfile(cred.user, { displayName: fullName.trim() });
       }
       onClose();
     } catch (err: unknown) {
@@ -169,9 +199,9 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-2xl p-0 sm:p-4">
-      <div className="w-full max-w-md bg-white/10 border border-white/20 rounded-t-3xl sm:rounded-3xl shadow-2xl shadow-black/30 backdrop-blur-2xl animate-slide-up max-h-[92vh] overflow-y-auto">
+      <div className="w-full max-w-md bg-slate-900/60 border border-white/10 rounded-t-3xl sm:rounded-3xl shadow-2xl shadow-black/30 backdrop-blur-xl animate-slide-up max-h-[92vh] overflow-y-auto">
         {/* HEADER */}
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/15 px-6 py-4 bg-white/10 backdrop-blur-2xl rounded-t-3xl">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 px-6 py-4 bg-slate-900/60 backdrop-blur-xl rounded-t-3xl">
           <div className="flex items-center space-x-2.5">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-400 via-blue-500 to-indigo-600 flex items-center justify-center font-black text-lg shadow-lg shadow-cyan-500/30 border border-white/20">
               B
@@ -226,13 +256,26 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
 
           {/* DIVIDER */}
           <div className="flex items-center gap-3 py-1">
-            <div className="flex-1 h-px bg-white/15" />
+            <div className="flex-1 h-px bg-white/10" />
             <span className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">və ya</span>
-            <div className="flex-1 h-px bg-white/15" />
+            <div className="flex-1 h-px bg-white/10" />
           </div>
 
           {/* EMAIL / PASSWORD FORM */}
           <div className="space-y-3">
+            {/* Full Name — signup only */}
+            {mode === 'signup' && (
+              <div className="relative">
+                <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="Ad və Soyad"
+                  className="w-full bg-white/10 border border-white/15 rounded-2xl pl-10 pr-4 py-3 text-sm text-white placeholder-slate-400 backdrop-blur-xl focus:outline-none focus:border-cyan-400/80 transition-all"
+                />
+              </div>
+            )}
             <div className="relative">
               <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
@@ -260,11 +303,35 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
+            {/* Confirm Password — signup only */}
+            {mode === 'signup' && (
+              <div className="relative">
+                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleEmailAuth()}
+                  placeholder="Şifrənin təkrarı"
+                  className={`w-full bg-white/10 border rounded-2xl pl-10 pr-11 py-3 text-sm text-white placeholder-slate-400 backdrop-blur-xl focus:outline-none transition-all ${
+                    confirmPassword && password !== confirmPassword
+                      ? 'border-rose-500/60 focus:border-rose-500'
+                      : 'border-white/15 focus:border-cyan-400/80'
+                  }`}
+                />
+                <button
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-all"
+                >
+                  {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            )}
           </div>
 
           {/* ERROR */}
           {authError && (
-            <div className="rounded-xl bg-rose-500/15 border border-rose-500/30 px-4 py-2.5 text-xs text-rose-300 backdrop-blur-xl">
+            <div className="rounded-2xl bg-rose-500/15 border border-rose-500/30 px-4 py-2.5 text-xs text-rose-300 backdrop-blur-xl">
               {authError}
             </div>
           )}
@@ -298,7 +365,7 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* FOOTER */}
-        <div className="px-6 py-3 border-t border-white/15 text-center">
+        <div className="px-6 py-3 border-t border-white/10 text-center">
           <p className="text-[10px] text-slate-400">
             Davam edərək BVM İstifadəçi Şərtləri və Məxfilik Siyasətini qəbul edirsiniz
           </p>
