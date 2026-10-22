@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Home, Heart, MessageSquare, User, Search, SlidersHorizontal,
   Send, Phone, FileText, CheckCircle2, Building2,
@@ -52,13 +52,20 @@ export default function App() {
   const [cvLoading, setCvLoading] = useState(false);
 
   // Messages state
-  const [conversations, setConversations] = useState([
+  const [conversations] = useState([
     { id: 1, name: 'Pasha Bank HR', lastMsg: 'Sizin CV-nizə baxdıq...', time: '10:24', unread: 2 },
     { id: 2, name: 'Kapital Bank', lastMsg: 'Müsahibə vaxtını təsdiqləyin', time: 'Dünən', unread: 0 },
     { id: 3, name: 'Azercell İşə Qəbul', lastMsg: 'Təşəkkür edirik!', time: '2 gün', unread: 0 },
   ]);
   const [selectedChat, setSelectedChat] = useState<number | null>(null);
   const [chatInput, setChatInput] = useState('');
+  const [chatMessages, setChatMessages] = useState<{ id: string; from: string; text: string; time: string }[]>([]);
+
+  // Company search filter
+  const [companySearch, setCompanySearch] = useState('');
+
+  // File input ref for CV upload
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     localStorage.setItem('bvm_favorites', JSON.stringify(favorites));
@@ -134,17 +141,17 @@ export default function App() {
 
   const filteredFeed = sortedFeed(
     feedItems.filter((item) => {
-      if (!searchQuery) return true;
       const q = searchQuery.toLowerCase();
-      if (item.type === 'vacancy') {
-        return (
-          item.title.toLowerCase().includes(q) ||
-          item.location.toLowerCase().includes(q) ||
-          item.salary.toLowerCase().includes(q) ||
-          (item.company?.name || '').toLowerCase().includes(q)
-        );
-      }
-      return item.title.toLowerCase().includes(q) || (item.company?.name || '').toLowerCase().includes(q);
+      const cq = companySearch.toLowerCase();
+      const companyName = (item.company?.name || '').toLowerCase();
+      const matchesSearch = !q || (
+        item.title.toLowerCase().includes(q) ||
+        (item.type === 'vacancy' && item.location.toLowerCase().includes(q)) ||
+        (item.type === 'vacancy' && item.salary.toLowerCase().includes(q)) ||
+        companyName.includes(q)
+      );
+      const matchesCompany = !cq || companyName.includes(cq);
+      return matchesSearch && matchesCompany;
     })
   );
 
@@ -155,9 +162,57 @@ export default function App() {
     setSelectedWorkTypes((prev) => (prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]));
   };
 
-  const handleSendMessage = () => {
-    if (!chatInput.trim() || selectedChat === null) return;
+  const loadChatMessages = useCallback(async (convId: number, uid: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .select('id, sender, text, created_at')
+        .eq('conversation_id', convId)
+        .eq('firebase_uid', uid)
+        .order('created_at', { ascending: true });
+      if (error) return;
+      setChatMessages((data || []).map((m) => ({
+        id: m.id,
+        from: m.sender,
+        text: m.text,
+        time: new Date(m.created_at).toLocaleTimeString('az-AZ', { hour: '2-digit', minute: '2-digit' }),
+      })));
+    } catch {
+      // keep empty
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedChat !== null && user) {
+      loadChatMessages(selectedChat, user.uid);
+    } else {
+      setChatMessages([]);
+    }
+  }, [selectedChat, user, loadChatMessages]);
+
+  const handleSendMessage = async () => {
+    if (!chatInput.trim() || selectedChat === null || !user) return;
+    const text = chatInput.trim();
     setChatInput('');
+    const tempId = `temp_${Date.now()}`;
+    const now = new Date().toLocaleTimeString('az-AZ', { hour: '2-digit', minute: '2-digit' });
+    setChatMessages((prev) => [...prev, { id: tempId, from: 'me', text, time: now }]);
+    try {
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .insert({ firebase_uid: user.uid, conversation_id: selectedChat, sender: 'me', text })
+        .select('id')
+        .single();
+      if (error) {
+        setChatMessages((prev) => prev.filter((m) => m.id !== tempId));
+        setChatInput(text);
+        return;
+      }
+      setChatMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, id: data.id } : m));
+    } catch {
+      setChatMessages((prev) => prev.filter((m) => m.id !== tempId));
+      setChatInput(text);
+    }
   };
 
   const loadCvs = useCallback(async (uid: string) => {
@@ -182,20 +237,26 @@ export default function App() {
     else setCvFiles([]);
   }, [user, loadCvs]);
 
-  const handleAddCv = async () => {
+  const handleAddCv = () => {
     if (!user || cvFiles.length >= 5) return;
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    e.target.value = '';
     const lang = cvLanguage;
-    const name = `CV_${lang}_${Date.now()}.pdf`;
     try {
       const { data, error } = await supabase
         .from('cvs')
-        .insert({ firebase_uid: user.uid, file_name: name, lang })
+        .insert({ firebase_uid: user.uid, file_name: file.name, lang })
         .select('id, file_name, lang')
         .single();
       if (error) return;
       setCvFiles((prev) => [...prev, { id: data.id, name: data.file_name, lang: data.lang }]);
     } catch {
-      // ignore — don't crash
+      // ignore
     }
   };
 
@@ -207,7 +268,7 @@ export default function App() {
       <div className="fixed bottom-[-5%] left-[20%] w-[300px] h-[300px] rounded-full bg-indigo-500/8 blur-[110px] pointer-events-none" />
 
       {/* HEADER */}
-      <header className="sticky top-0 z-40 backdrop-blur-2xl bg-white/10 border-b border-white/15 px-4 py-3 shadow-lg shadow-black/10">
+      <header className="sticky top-0 z-40 backdrop-blur-md bg-slate-900/60 border-b border-white/10 px-4 py-3 shadow-lg shadow-black/10">
         <div className="flex items-center justify-between max-w-md mx-auto">
           <div className="flex items-center space-x-2.5">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-400 via-blue-500 to-indigo-600 flex items-center justify-center font-black text-lg shadow-lg shadow-cyan-500/30 border border-white/20">
@@ -264,6 +325,7 @@ export default function App() {
             chatInput={chatInput}
             setChatInput={setChatInput}
             handleSendMessage={handleSendMessage}
+            chatMessages={chatMessages}
           />
         )}
 
@@ -280,6 +342,9 @@ export default function App() {
             user={user}
             authLoading={authLoading}
             onShowAuth={() => setShowAuthModal(true)}
+            fileInputRef={fileInputRef}
+            onFileSelected={handleFileSelected}
+            cvLanguage={cvLanguage}
           />
         )}
       </main>
@@ -303,6 +368,8 @@ export default function App() {
           setCvLanguage={setCvLanguage}
           salaryRange={salaryRange}
           setSalaryRange={setSalaryRange}
+          companySearch={companySearch}
+          setCompanySearch={setCompanySearch}
         />
       )}
 
@@ -312,7 +379,7 @@ export default function App() {
       )}
 
       {/* BOTTOM NAV */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 backdrop-blur-2xl bg-white/10 border-t border-white/15 py-2.5 shadow-lg shadow-black/20">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 backdrop-blur-md bg-slate-900/60 border-t border-white/10 py-2.5 shadow-lg shadow-black/20">
         <div className="max-w-md mx-auto flex justify-around items-center">
           {[
             { id: 'home', label: 'Ana Ekran', icon: Home },
@@ -383,13 +450,13 @@ function HomeTab({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Vakansiya, şəhər və ya vəzifə axtar..."
-            className="w-full bg-white/10 border border-white/15 rounded-2xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-slate-300 backdrop-blur-2xl focus:outline-none focus:border-cyan-400/80 transition-all"
+            placeholder="Vakansiya, şəhər, vəzifə və ya şirkət axtar..."
+            className="w-full bg-slate-900/60 border border-white/10 rounded-2xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-slate-300 backdrop-blur-md focus:outline-none focus:border-cyan-400/80 transition-all"
           />
         </div>
         <button
           onClick={() => setShowFilterModal(true)}
-          className="p-2.5 rounded-2xl bg-cyan-500/20 border border-cyan-400/40 backdrop-blur-2xl text-cyan-200 hover:bg-cyan-500/30 active:scale-95 transition-all shadow-lg shadow-cyan-500/15"
+          className="p-2.5 rounded-2xl bg-cyan-500/20 border border-cyan-400/40 backdrop-blur-md text-cyan-200 hover:bg-cyan-500/30 active:scale-95 transition-all shadow-lg shadow-cyan-500/15"
         >
           <SlidersHorizontal className="w-4 h-4" />
         </button>
@@ -400,7 +467,7 @@ function HomeTab({
         {loading ? (
           <div className="space-y-4">
             {[1, 2].map((i) => (
-              <div key={i} className="rounded-3xl bg-white/10 border border-white/15 backdrop-blur-2xl p-5 space-y-3 animate-pulse">
+              <div key={i} className="rounded-3xl bg-slate-900/60 border border-white/10 backdrop-blur-md p-5 space-y-3 animate-pulse">
                 <div className="h-6 w-32 bg-white/10 rounded-lg" />
                 <div className="h-4 w-48 bg-white/10 rounded" />
                 <div className="h-3 w-24 bg-white/5 rounded" />
@@ -445,7 +512,7 @@ function FeedCard({
   const companyName = item.company?.name || '';
   return (
     <div
-      className="relative rounded-3xl bg-white/10 border border-white/15 backdrop-blur-2xl p-5 space-y-4 shadow-xl shadow-black/10 hover:border-cyan-400/30 hover:bg-white/[0.12] transition-all group animate-fade-in-up"
+      className="relative rounded-3xl bg-slate-900/60 border border-white/10 backdrop-blur-md p-5 space-y-4 shadow-xl shadow-black/10 hover:border-cyan-400/30 hover:bg-white/[0.12] transition-all group animate-fade-in-up"
       style={{ animationDelay: `${index * 0.08}s` }}
     >
       {item.is_vip && (
@@ -574,6 +641,7 @@ function FavoritesTab({
 
 function MessagesTab({
   conversations, selectedChat, setSelectedChat, chatInput, setChatInput, handleSendMessage,
+  chatMessages,
 }: {
   conversations: { id: number; name: string; lastMsg: string; time: string; unread: number }[];
   selectedChat: number | null;
@@ -581,19 +649,15 @@ function MessagesTab({
   chatInput: string;
   setChatInput: (v: string) => void;
   handleSendMessage: () => void;
+  chatMessages: { id: string; from: string; text: string; time: string }[];
 }) {
   const activeConv = conversations.find((c) => c.id === selectedChat);
-  const mockMessages = [
-    { from: 'them', text: 'Salam, sizin CV-nizə baxdıq və kifayət qədər təcrübəniz var.', time: '10:20' },
-    { from: 'me', text: 'Çox sağ olun! Müsahibə üçün nə vaxt gələ bilərəm?', time: '10:22' },
-    { from: 'them', text: 'Sizin CV-nizə baxdıq...', time: '10:24' },
-  ];
 
   if (selectedChat !== null && activeConv) {
     return (
       <div className="flex flex-col pt-2 animate-fade-in-up" style={{ minHeight: 'calc(100vh - 140px)' }}>
         <div className="flex items-center space-x-3 pb-3 border-b border-white/10">
-          <button onClick={() => setSelectedChat(null)} className="p-1.5 rounded-full bg-white/10 border border-white/15 backdrop-blur-xl text-slate-200 hover:text-white hover:bg-white/20 transition-all">
+          <button onClick={() => setSelectedChat(null)} className="p-1.5 rounded-full bg-slate-900/60 border border-white/10 backdrop-blur-xl text-slate-200 hover:text-white hover:bg-white/20 transition-all">
             <X className="w-4 h-4" />
           </button>
           <div className="w-10 h-10 rounded-full bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center font-bold text-cyan-300">
@@ -605,24 +669,30 @@ function MessagesTab({
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Aktiv
             </p>
           </div>
-          <button className="p-2 rounded-full bg-white/10 border border-white/15 backdrop-blur-xl text-cyan-400 hover:bg-cyan-500/15 transition-all">
+          <button className="p-2 rounded-full bg-slate-900/60 border border-white/10 backdrop-blur-xl text-cyan-400 hover:bg-cyan-500/15 transition-all">
             <Phone className="w-4 h-4" />
           </button>
         </div>
 
         <div className="flex flex-col gap-3 overflow-y-auto flex-1 pb-20 pt-3">
-          {mockMessages.map((msg, i) => (
-            <div key={i} className={`flex ${msg.from === 'me' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[75%] px-3.5 py-2.5 rounded-2xl text-xs leading-relaxed ${
-                msg.from === 'me'
-                  ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-br-md'
-                  : 'bg-slate-900/60 border border-white/10 backdrop-blur-xl text-slate-200 rounded-bl-md'
-              }`}>
-                {msg.text}
-                <span className="block text-[9px] text-slate-400 mt-1 text-right">{msg.time}</span>
-              </div>
+          {chatMessages.length === 0 ? (
+            <div className="flex items-center justify-center py-10">
+              <p className="text-xs text-slate-500">Hələ mesaj yoxdur. İlk mesajı göndərin!</p>
             </div>
-          ))}
+          ) : (
+            chatMessages.map((msg) => (
+              <div key={msg.id} className={`flex ${msg.from === 'me' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[75%] px-3.5 py-2.5 rounded-2xl text-xs leading-relaxed ${
+                  msg.from === 'me'
+                    ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-br-md'
+                    : 'bg-slate-900/60 border border-white/10 backdrop-blur-xl text-slate-200 rounded-bl-md'
+                }`}>
+                  {msg.text}
+                  <span className="block text-[9px] text-slate-400 mt-1 text-right">{msg.time}</span>
+                </div>
+              </div>
+            ))
+          )}
         </div>
 
         <div className="fixed bottom-16 left-0 right-0 px-3 z-30">
@@ -688,7 +758,7 @@ function MessagesTab({
 
 function ProfileTab({
   role, setRole, postText, setPostText, cvFiles, setCvFiles, handleAddCv,
-  cvLoading, user, authLoading, onShowAuth,
+  cvLoading, user, authLoading, onShowAuth, fileInputRef, onFileSelected, cvLanguage,
 }: {
   role: 'jobseeker' | 'employer';
   setRole: (r: 'jobseeker' | 'employer') => void;
@@ -701,6 +771,9 @@ function ProfileTab({
   user: FirebaseUser | null;
   authLoading: boolean;
   onShowAuth: () => void;
+  fileInputRef: React.RefObject<HTMLInputElement>;
+  onFileSelected: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  cvLanguage: string;
 }) {
   const [stats, setStats] = useState({ applied: 12, saved: 0, viewed: 48 });
 
@@ -975,7 +1048,7 @@ function FilterModal({
   onClose, sortBy, setSortBy, experienceUnit, setExperienceUnit, experienceVal, setExperienceVal,
   workTypeOptions, selectedWorkTypes, toggleWorkType,
   customWorkType, setCustomWorkType, cvLanguage, setCvLanguage,
-  salaryRange, setSalaryRange,
+  salaryRange, setSalaryRange, companySearch, setCompanySearch,
 }: {
   onClose: () => void;
   sortBy: SortBy;
@@ -993,15 +1066,32 @@ function FilterModal({
   setCvLanguage: (v: string) => void;
   salaryRange: number;
   setSalaryRange: (v: number) => void;
+  companySearch: string;
+  setCompanySearch: (v: string) => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-2xl flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div className="w-full max-w-md bg-slate-900/60 border border-white/10 rounded-t-3xl sm:rounded-3xl p-6 space-y-5 max-h-[85vh] overflow-y-auto shadow-2xl shadow-black/30 backdrop-blur-xl animate-slide-up">
-        <div className="flex justify-between items-center border-b border-white/15 pb-3">
+        <div className="flex justify-between items-center border-b border-white/10 pb-3">
           <h3 className="text-base font-bold text-white tracking-wide">BVM Filtrlər Və Sıralama</h3>
-          <button onClick={onClose} className="p-1 text-slate-400 hover:text-white transition-all">
+          <button onClick={onClose} className="p-1.5 rounded-full bg-white/10 border border-white/15 text-slate-400 hover:text-white transition-all">
             <X className="w-5 h-5" />
           </button>
+        </div>
+
+        {/* Company Name Search */}
+        <div className="space-y-2">
+          <label className="text-xs font-semibold text-slate-300 flex items-center space-x-1">
+            <Building2 className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Şirkət Adı</span>
+          </label>
+          <input
+            type="text"
+            value={companySearch}
+            onChange={(e) => setCompanySearch(e.target.value)}
+            placeholder="Şirkət adı ilə axtarış..."
+            className="w-full bg-slate-900/60 border border-white/10 rounded-2xl px-3.5 py-2.5 text-xs text-white placeholder-slate-400 backdrop-blur-md focus:outline-none focus:border-cyan-400/80 transition-all"
+          />
         </div>
 
         {/* Sorting Options */}
