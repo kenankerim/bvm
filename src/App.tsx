@@ -47,11 +47,9 @@ export default function App() {
   // Post creator state
   const [postText, setPostText] = useState('');
 
-  // CV upload state
-  const [cvFiles, setCvFiles] = useState<{ name: string; lang: string }[]>([
-    { name: 'CV_Kanan_Kerimov_AZ.pdf', lang: 'AZ' },
-    { name: 'CV_Kanan_Kerimov_EN.pdf', lang: 'EN' },
-  ]);
+  // CV upload state — dynamically loaded per Firebase user
+  const [cvFiles, setCvFiles] = useState<{ id: string; name: string; lang: string }[]>([]);
+  const [cvLoading, setCvLoading] = useState(false);
 
   // Messages state
   const [conversations, setConversations] = useState([
@@ -162,12 +160,43 @@ export default function App() {
     setChatInput('');
   };
 
-  const handleAddCv = () => {
-    if (cvFiles.length >= 5) return;
+  const loadCvs = useCallback(async (uid: string) => {
+    setCvLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('cvs')
+        .select('id, file_name, lang')
+        .eq('firebase_uid', uid)
+        .order('created_at', { ascending: false });
+      if (error) return;
+      setCvFiles((data || []).map((r) => ({ id: r.id, name: r.file_name, lang: r.lang })));
+    } catch {
+      // keep empty — don't crash
+    } finally {
+      setCvLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (user) loadCvs(user.uid);
+    else setCvFiles([]);
+  }, [user, loadCvs]);
+
+  const handleAddCv = async () => {
+    if (!user || cvFiles.length >= 5) return;
     const lang = cvLanguage;
-    const name = `CV_Yeni_${lang}.pdf`;
-    if (cvFiles.some((f) => f.name === name)) return;
-    setCvFiles([...cvFiles, { name, lang }]);
+    const name = `CV_${lang}_${Date.now()}.pdf`;
+    try {
+      const { data, error } = await supabase
+        .from('cvs')
+        .insert({ firebase_uid: user.uid, file_name: name, lang })
+        .select('id, file_name, lang')
+        .single();
+      if (error) return;
+      setCvFiles((prev) => [...prev, { id: data.id, name: data.file_name, lang: data.lang }]);
+    } catch {
+      // ignore — don't crash
+    }
   };
 
   return (
@@ -247,6 +276,7 @@ export default function App() {
             cvFiles={cvFiles}
             setCvFiles={setCvFiles}
             handleAddCv={handleAddCv}
+            cvLoading={cvLoading}
             user={user}
             authLoading={authLoading}
             onShowAuth={() => setShowAuthModal(true)}
@@ -561,7 +591,7 @@ function MessagesTab({
 
   if (selectedChat !== null && activeConv) {
     return (
-      <div className="space-y-3 pt-2 animate-fade-in-up">
+      <div className="flex flex-col pt-2 animate-fade-in-up" style={{ minHeight: 'calc(100vh - 140px)' }}>
         <div className="flex items-center space-x-3 pb-3 border-b border-white/10">
           <button onClick={() => setSelectedChat(null)} className="p-1.5 rounded-full bg-white/10 border border-white/15 backdrop-blur-xl text-slate-200 hover:text-white hover:bg-white/20 transition-all">
             <X className="w-4 h-4" />
@@ -580,13 +610,13 @@ function MessagesTab({
           </button>
         </div>
 
-        <div className="space-y-3 pb-4">
+        <div className="flex flex-col gap-3 overflow-y-auto flex-1 pb-20 pt-3">
           {mockMessages.map((msg, i) => (
             <div key={i} className={`flex ${msg.from === 'me' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[80%] px-3.5 py-2.5 rounded-2xl text-xs leading-relaxed ${
+              <div className={`max-w-[75%] px-3.5 py-2.5 rounded-2xl text-xs leading-relaxed ${
                 msg.from === 'me'
                   ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-br-md'
-                  : 'bg-white/10 border border-white/15 backdrop-blur-xl text-slate-200 rounded-bl-md'
+                  : 'bg-slate-900/60 border border-white/10 backdrop-blur-xl text-slate-200 rounded-bl-md'
               }`}>
                 {msg.text}
                 <span className="block text-[9px] text-slate-400 mt-1 text-right">{msg.time}</span>
@@ -595,8 +625,8 @@ function MessagesTab({
           ))}
         </div>
 
-        <div className="fixed bottom-16 left-0 right-0 px-3">
-          <div className="max-w-md mx-auto flex items-center space-x-2 bg-white/10 border border-white/15 rounded-2xl p-1.5 backdrop-blur-2xl shadow-lg shadow-black/10">
+        <div className="fixed bottom-16 left-0 right-0 px-3 z-30">
+          <div className="max-w-md mx-auto flex items-center space-x-2 bg-slate-900/60 border border-white/10 rounded-2xl p-1.5 backdrop-blur-xl shadow-lg shadow-black/10">
             <input
               type="text"
               value={chatInput}
@@ -627,7 +657,7 @@ function MessagesTab({
         <button
           key={conv.id}
           onClick={() => setSelectedChat(conv.id)}
-          className="w-full flex items-center space-x-3 p-3.5 rounded-2xl bg-white/10 border border-white/15 backdrop-blur-2xl hover:bg-white/[0.15] hover:border-cyan-400/25 transition-all text-left active:scale-[0.98] shadow-lg shadow-black/5"
+          className="w-full flex items-center space-x-3 p-3.5 rounded-2xl bg-slate-900/60 border border-white/10 backdrop-blur-xl hover:bg-white/[0.15] hover:border-cyan-400/25 transition-all text-left active:scale-[0.98] shadow-lg shadow-black/5"
         >
           <div className="relative flex-shrink-0">
             <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-cyan-500 via-blue-600 to-indigo-600 flex items-center justify-center text-sm font-bold border border-white/20">
@@ -658,15 +688,16 @@ function MessagesTab({
 
 function ProfileTab({
   role, setRole, postText, setPostText, cvFiles, setCvFiles, handleAddCv,
-  user, authLoading, onShowAuth,
+  cvLoading, user, authLoading, onShowAuth,
 }: {
   role: 'jobseeker' | 'employer';
   setRole: (r: 'jobseeker' | 'employer') => void;
   postText: string;
   setPostText: (v: string) => void;
-  cvFiles: { name: string; lang: string }[];
-  setCvFiles: (v: { name: string; lang: string }[]) => void;
+  cvFiles: { id: string; name: string; lang: string }[];
+  setCvFiles: (v: { id: string; name: string; lang: string }[]) => void;
   handleAddCv: () => void;
+  cvLoading: boolean;
   user: FirebaseUser | null;
   authLoading: boolean;
   onShowAuth: () => void;
@@ -682,8 +713,13 @@ function ProfileTab({
     }
   }, []);
 
-  const removeCv = (name: string) => {
-    setCvFiles(cvFiles.filter((f) => f.name !== name));
+  const removeCv = async (id: string) => {
+    try {
+      await supabase.from('cvs').delete().eq('id', id);
+      setCvFiles(cvFiles.filter((f) => f.id !== id));
+    } catch {
+      // ignore
+    }
   };
 
   const menuItems = role === 'jobseeker'
@@ -703,7 +739,7 @@ function ProfileTab({
   return (
     <div className="space-y-4 pt-2">
       {/* Profile Header Card */}
-      <div className="rounded-3xl bg-white/10 border border-white/15 p-5 space-y-4 backdrop-blur-2xl shadow-xl shadow-black/10">
+      <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-5 space-y-4 backdrop-blur-xl shadow-xl shadow-black/10">
         <div className="flex items-center space-x-4">
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-cyan-500 via-blue-600 to-indigo-600 flex items-center justify-center text-2xl font-black border border-white/20 shadow-lg">
             {role === 'jobseeker' ? 'İA' : 'ŞP'}
@@ -747,7 +783,7 @@ function ProfileTab({
       </div>
 
       {/* Post Creator */}
-      <div className="rounded-3xl bg-white/10 border border-white/15 backdrop-blur-2xl p-4 space-y-3 shadow-xl shadow-black/10">
+      <div className="rounded-3xl bg-slate-900/60 border border-white/10 backdrop-blur-xl p-4 space-y-3 shadow-xl shadow-black/10">
         <span className="text-xs font-bold text-cyan-200">Yeni Post / Məqalə Paylaş</span>
         <textarea
           rows={3}
@@ -772,48 +808,70 @@ function ProfileTab({
       </div>
 
       {/* Multi CV Uploader */}
-      <div className="rounded-3xl bg-white/10 border border-white/15 backdrop-blur-2xl p-4 space-y-3 shadow-xl shadow-black/10">
+      <div className="rounded-3xl bg-slate-900/60 border border-white/10 backdrop-blur-xl p-4 space-y-3 shadow-xl shadow-black/10">
         <div className="flex justify-between items-center">
           <span className="text-xs font-bold text-white">Mənim CV-lərim (Maks 5 ədəd)</span>
           <span className="text-[10px] text-cyan-300 font-semibold bg-cyan-500/10 px-2 py-0.5 rounded-lg border border-cyan-500/20">
             {cvFiles.length}/5 Yüklənib
           </span>
         </div>
-        <div className="space-y-2">
-          {cvFiles.map((file) => (
-            <div key={file.name} className="flex items-center justify-between bg-white/10 border border-white/15 backdrop-blur-xl p-2.5 rounded-2xl text-xs">
-              <div className="flex items-center space-x-2">
-                <FileText className="w-4 h-4 text-cyan-400" />
-                <span>{file.name}</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
-                  file.lang === 'AZ' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' :
-                  file.lang === 'EN' ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' :
-                  file.lang === 'RU' ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' :
-                  'text-amber-400 bg-amber-500/10 border-amber-500/20'
-                }`}>
-                  {file.lang}
-                </span>
-                <button onClick={() => removeCv(file.name)} className="text-slate-400 hover:text-rose-400 transition-all">
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
+        {cvLoading ? (
+          <div className="flex items-center justify-center py-6">
+            <Loader2 className="w-5 h-5 animate-spin text-cyan-400" />
+          </div>
+        ) : cvFiles.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-6 space-y-3">
+            <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-400/20 flex items-center justify-center">
+              <FileText className="w-6 h-6 text-cyan-400/60" />
             </div>
-          ))}
-        </div>
-        <button
-          onClick={handleAddCv}
-          disabled={cvFiles.length >= 5}
-          className="w-full py-2.5 rounded-2xl bg-white/10 border border-dashed border-white/25 backdrop-blur-xl text-xs font-semibold text-slate-200 hover:bg-white/15 transition-all flex items-center justify-center space-x-2 disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          <PlusCircle className="w-4 h-4 text-cyan-400" />
-          <span>Yeni CV / Sertifikat Yüklə</span>
-        </button>
+            <p className="text-xs text-slate-400 font-medium text-center">Hələ heç bir CV yükleməmisiniz</p>
+            <button
+              onClick={handleAddCv}
+              disabled={!user}
+              className="px-5 py-2 rounded-2xl bg-gradient-to-r from-cyan-400 to-blue-500 text-black font-bold text-xs hover:opacity-90 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Əlavə et
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {cvFiles.map((file) => (
+              <div key={file.id} className="flex items-center justify-between bg-white/10 border border-white/15 backdrop-blur-xl p-2.5 rounded-2xl text-xs">
+                <div className="flex items-center space-x-2">
+                  <FileText className="w-4 h-4 text-cyan-400" />
+                  <span>{file.name}</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
+                    file.lang === 'AZ' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' :
+                    file.lang === 'EN' ? 'text-blue-400 bg-blue-500/10 border-blue-500/20' :
+                    file.lang === 'RU' ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' :
+                    'text-amber-400 bg-amber-500/10 border-amber-500/20'
+                  }`}>
+                    {file.lang}
+                  </span>
+                  <button onClick={() => removeCv(file.id)} className="text-slate-400 hover:text-rose-400 transition-all">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {cvFiles.length > 0 && (
+          <button
+            onClick={handleAddCv}
+            disabled={cvFiles.length >= 5 || !user}
+            className="w-full py-2.5 rounded-2xl bg-white/10 border border-dashed border-white/25 backdrop-blur-xl text-xs font-semibold text-slate-200 hover:bg-white/15 transition-all flex items-center justify-center space-x-2 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <PlusCircle className="w-4 h-4 text-cyan-400" />
+            <span>Yeni CV / Sertifikat Yüklə</span>
+          </button>
+        )}
       </div>
 
       {/* Role Switch Card */}
-      <div className="rounded-2xl bg-white/10 border border-white/15 p-4 space-y-2 backdrop-blur-2xl shadow-lg shadow-black/5">
+      <div className="rounded-2xl bg-slate-900/60 border border-white/10 p-4 space-y-2 backdrop-blur-xl shadow-lg shadow-black/5">
         <div className="flex items-center space-x-2 pb-1">
           <Globe className="w-4 h-4 text-cyan-400" />
           <p className="text-xs font-bold text-slate-200 tracking-wide">Rejim Dəyişdir</p>
@@ -839,7 +897,7 @@ function ProfileTab({
       </div>
 
       {/* Menu Items */}
-      <div className="rounded-2xl bg-white/10 border border-white/15 overflow-hidden backdrop-blur-2xl shadow-lg shadow-black/5">
+      <div className="rounded-2xl bg-slate-900/60 border border-white/10 overflow-hidden backdrop-blur-xl shadow-lg shadow-black/5">
         {menuItems.map((item, i) => {
           const Icon = item.icon;
           return (
@@ -863,7 +921,7 @@ function ProfileTab({
       </div>
 
       {/* Settings & Logout */}
-      <div className="rounded-2xl bg-white/10 border border-white/15 overflow-hidden backdrop-blur-2xl shadow-lg shadow-black/5">
+      <div className="rounded-2xl bg-slate-900/60 border border-white/10 overflow-hidden backdrop-blur-xl shadow-lg shadow-black/5">
         <button className="w-full flex items-center space-x-3 p-4 hover:bg-white/[0.08] transition-all text-left border-b border-white/10">
           <div className="w-9 h-9 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center text-slate-200">
             <Settings className="w-4 h-4" />
@@ -895,7 +953,7 @@ function ProfileTab({
 
 function StatBox({ icon: Icon, value, label }: { icon: React.ElementType; value: number | string; label: string }) {
   return (
-    <div className="rounded-xl bg-white/10 border border-white/15 backdrop-blur-xl p-2.5 text-center space-y-1">
+    <div className="rounded-xl bg-slate-900/60 border border-white/10 backdrop-blur-xl p-2.5 text-center space-y-1">
       <Icon className="w-4 h-4 text-cyan-400 mx-auto" />
       <p className="text-base font-extrabold text-white">{value}</p>
       <p className="text-[9px] text-slate-400 font-medium uppercase tracking-wider">{label}</p>
@@ -938,7 +996,7 @@ function FilterModal({
 }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-2xl flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="w-full max-w-md bg-white/10 border border-white/20 rounded-t-3xl sm:rounded-3xl p-6 space-y-5 max-h-[85vh] overflow-y-auto shadow-2xl shadow-black/30 backdrop-blur-2xl animate-slide-up">
+      <div className="w-full max-w-md bg-slate-900/60 border border-white/10 rounded-t-3xl sm:rounded-3xl p-6 space-y-5 max-h-[85vh] overflow-y-auto shadow-2xl shadow-black/30 backdrop-blur-xl animate-slide-up">
         <div className="flex justify-between items-center border-b border-white/15 pb-3">
           <h3 className="text-base font-bold text-white tracking-wide">BVM Filtrlər Və Sıralama</h3>
           <button onClick={onClose} className="p-1 text-slate-400 hover:text-white transition-all">
