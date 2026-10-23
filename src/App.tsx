@@ -3,8 +3,9 @@ import {
   Home, Heart, MessageSquare, User, Search, SlidersHorizontal,
   Send, Phone, FileText, CheckCircle2, Building2,
   Briefcase, PlusCircle, X, Globe, Eye, MapPin, Clock, Bookmark,
-  Bell, Settings, LogOut, Star, TrendingUp, Award, Mail,
-  ArrowUpDown, Image as ImageIcon, Paperclip, Check, Loader2,
+  Bell, BellOff, Settings, LogOut, Star, TrendingUp, Award, Mail,
+  ArrowUpDown, Image as ImageIcon, Paperclip, Check, Loader2, Lock,
+  Plus, Trash2, Calendar, Users,
 } from 'lucide-react';
 import { supabase, type Company, type Vacancy, type Article, type FeedItem } from './lib/supabase';
 import { firebaseAuth, type FirebaseUser } from './lib/firebase';
@@ -66,6 +67,28 @@ export default function App() {
 
   // File input ref for CV upload
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // File input refs for post upload
+  const postImageRef = useRef<HTMLInputElement>(null);
+  const postDocRef = useRef<HTMLInputElement>(null);
+  // File input refs for profile photos
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
+
+  // Notification bell toggle
+  const [notificationsOn, setNotificationsOn] = useState(() => {
+    try { return localStorage.getItem('bvm_notifications') !== 'off'; } catch { return true; }
+  });
+  useEffect(() => {
+    localStorage.setItem('bvm_notifications', notificationsOn ? 'on' : 'off');
+  }, [notificationsOn]);
+
+  // Post attachment state
+  const [postFileName, setPostFileName] = useState('');
+  const [postFileType, setPostFileType] = useState('');
+
+  // Profile photo state
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [coverUrl, setCoverUrl] = useState('');
 
   useEffect(() => {
     localStorage.setItem('bvm_favorites', JSON.stringify(favorites));
@@ -260,6 +283,70 @@ export default function App() {
     }
   };
 
+  const handlePostImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    if (file.type.startsWith('video/')) return;
+    setPostFileName(file.name);
+    setPostFileType('image');
+  };
+
+  const handlePostDoc = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    if (file.type.startsWith('video/')) return;
+    setPostFileName(file.name);
+    setPostFileType('document');
+  };
+
+  const handlePublishPost = async () => {
+    if (!postText.trim() && !postFileName) return;
+    if (!user) return;
+    try {
+      await supabase.from('posts').insert({
+        firebase_uid: user.uid,
+        content: postText.trim(),
+        file_name: postFileName || null,
+        file_type: postFileType || null,
+      });
+      setPostText('');
+      setPostFileName('');
+      setPostFileType('');
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleAvatarSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    e.target.value = '';
+    if (file.type.startsWith('video/')) return;
+    const url = URL.createObjectURL(file);
+    setAvatarUrl(url);
+    try {
+      await supabase.from('profile_photos').upsert({ firebase_uid: user.uid, avatar_url: url }, { onConflict: 'firebase_uid' });
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleCoverSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    e.target.value = '';
+    if (file.type.startsWith('video/')) return;
+    const url = URL.createObjectURL(file);
+    setCoverUrl(url);
+    try {
+      await supabase.from('profile_photos').upsert({ firebase_uid: user.uid, cover_url: url }, { onConflict: 'firebase_uid' });
+    } catch {
+      // ignore
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0B132B] via-[#1C2541] to-[#3A506B] text-white font-sans antialiased pb-28 relative overflow-x-hidden selection:bg-cyan-500 selection:text-black">
       {/* DECORATIVE GLOW ORBS */}
@@ -284,8 +371,15 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center space-x-2">
-            <button className="p-2 rounded-full bg-white/10 border border-white/15 text-slate-200 hover:text-cyan-400 hover:bg-cyan-500/15 transition-all active:scale-95 backdrop-blur-xl">
-              <Bell className="w-4 h-4" />
+            <button
+              onClick={() => setNotificationsOn((v) => !v)}
+              className={`p-2 rounded-full border transition-all active:scale-95 backdrop-blur-xl ${
+                notificationsOn
+                  ? 'bg-cyan-500/15 border-cyan-400/40 text-cyan-300'
+                  : 'bg-white/10 border-white/15 text-slate-400'
+              }`}
+            >
+              {notificationsOn ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
             </button>
             <button
               onClick={() => setRole(role === 'jobseeker' ? 'employer' : 'jobseeker')}
@@ -345,6 +439,20 @@ export default function App() {
             fileInputRef={fileInputRef}
             onFileSelected={handleFileSelected}
             cvLanguage={cvLanguage}
+            postImageRef={postImageRef}
+            postDocRef={postDocRef}
+            onPostImage={handlePostImage}
+            onPostDoc={handlePostDoc}
+            postFileName={postFileName}
+            setPostFileName={setPostFileName}
+            setPostFileType={setPostFileType}
+            onPublishPost={handlePublishPost}
+            avatarInputRef={avatarInputRef}
+            coverInputRef={coverInputRef}
+            onAvatarSelected={handleAvatarSelected}
+            onCoverSelected={handleCoverSelected}
+            avatarUrl={avatarUrl}
+            coverUrl={coverUrl}
           />
         )}
       </main>
@@ -759,6 +867,9 @@ function MessagesTab({
 function ProfileTab({
   role, setRole, postText, setPostText, cvFiles, setCvFiles, handleAddCv,
   cvLoading, user, authLoading, onShowAuth, fileInputRef, onFileSelected, cvLanguage,
+  postImageRef, postDocRef, onPostImage, onPostDoc, postFileName, setPostFileName,
+  setPostFileType, onPublishPost, avatarInputRef, coverInputRef, onAvatarSelected,
+  onCoverSelected, avatarUrl, coverUrl,
 }: {
   role: 'jobseeker' | 'employer';
   setRole: (r: 'jobseeker' | 'employer') => void;
@@ -774,8 +885,29 @@ function ProfileTab({
   fileInputRef: React.RefObject<HTMLInputElement>;
   onFileSelected: (e: React.ChangeEvent<HTMLInputElement>) => void;
   cvLanguage: string;
+  postImageRef: React.RefObject<HTMLInputElement>;
+  postDocRef: React.RefObject<HTMLInputElement>;
+  onPostImage: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onPostDoc: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  postFileName: string;
+  setPostFileName: (v: string) => void;
+  setPostFileType: (v: string) => void;
+  onPublishPost: () => void;
+  avatarInputRef: React.RefObject<HTMLInputElement>;
+  coverInputRef: React.RefObject<HTMLInputElement>;
+  onAvatarSelected: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onCoverSelected: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  avatarUrl: string;
+  coverUrl: string;
 }) {
-  const [stats, setStats] = useState({ applied: 12, saved: 0, viewed: 48 });
+  const [stats, setStats] = useState({ applied: 0, saved: 0, viewed: 0 });
+  const [vacancyTab, setVacancyTab] = useState<'active' | 'inactive'>('active');
+  const [customSections, setCustomSections] = useState<{ id: string; title: string; visible: boolean }[]>([]);
+  const [newSectionTitle, setNewSectionTitle] = useState('');
+  const [showAddSection, setShowAddSection] = useState(false);
+  const [collaborators, setCollaborators] = useState<{ id: string; name: string; role: string }[]>([]);
+  const [newCollabName, setNewCollabName] = useState('');
+  const [showAddCollab, setShowAddCollab] = useState(false);
 
   useEffect(() => {
     try {
@@ -795,19 +927,79 @@ function ProfileTab({
     }
   };
 
-  const menuItems = role === 'jobseeker'
-    ? [
-        { icon: FileText, label: 'CV-lərim', sub: `${cvFiles.length} CV` },
-        { icon: Briefcase, label: 'Müraciətlərim', sub: `${stats.applied} aktiv` },
-        { icon: Bookmark, label: 'Seçilmişlər', sub: `${stats.saved} vakansiya` },
-        { icon: Eye, label: 'Baxış Tarixçəsi', sub: `${stats.viewed} vakansiya` },
-      ]
-    : [
-        { icon: Briefcase, label: 'Vakansiyalarım', sub: '5 aktiv' },
-        { icon: FileText, label: 'Müraciətlər', sub: '23 yeni' },
-        { icon: Building2, label: 'Şirkət Profili', sub: 'BVM dəyərləndirməsi' },
-        { icon: Award, label: 'Premium Elanlar', sub: '2 aktiv' },
-      ];
+  const getInitials = (name: string): string => {
+    if (!name) return 'İA';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    return name.slice(0, 2).toUpperCase();
+  };
+
+  const displayName = user ? (user.displayName || 'İstifadəçi') : (role === 'jobseeker' ? 'İş Axtaran İstifadəçi' : 'Şirkət Profili');
+  const initials = user?.displayName ? getInitials(user.displayName) : (role === 'jobseeker' ? 'İA' : 'ŞP');
+
+  const addCustomSection = async () => {
+    if (!newSectionTitle.trim() || !user) return;
+    try {
+      const { data, error } = await supabase
+        .from('employer_sections')
+        .insert({ firebase_uid: user.uid, title: newSectionTitle.trim(), is_visible: true, sort_order: customSections.length })
+        .select('id, title, is_visible')
+        .single();
+      if (error) return;
+      setCustomSections((prev) => [...prev, { id: data.id, title: data.title, visible: data.is_visible }]);
+      setNewSectionTitle('');
+      setShowAddSection(false);
+    } catch {
+      // ignore
+    }
+  };
+
+  const toggleSectionVisible = (id: string) => {
+    setCustomSections((prev) => prev.map((s) => s.id === id ? { ...s, visible: !s.visible } : s));
+  };
+
+  const deleteSection = async (id: string) => {
+    try { await supabase.from('employer_sections').delete().eq('id', id); } catch {}
+    setCustomSections((prev) => prev.filter((s) => s.id !== id));
+  };
+
+  const addCollaborator = async () => {
+    if (!newCollabName.trim() || !user) return;
+    try {
+      const { data, error } = await supabase
+        .from('employer_collaborators')
+        .insert({ firebase_uid: user.uid, name: newCollabName.trim() })
+        .select('id, name, role')
+        .single();
+      if (error) return;
+      setCollaborators((prev) => [...prev, { id: data.id, name: data.name, role: data.role }]);
+      setNewCollabName('');
+      setShowAddCollab(false);
+    } catch {
+      // ignore
+    }
+  };
+
+  const removeCollaborator = async (id: string) => {
+    try { await supabase.from('employer_collaborators').delete().eq('id', id); } catch {}
+    setCollaborators((prev) => prev.filter((c) => c.id !== id));
+  };
+
+  const employerMenuItems = [
+    { icon: FileText, label: 'Ehtiyatda olan CV-lər', sub: 'Saxlanılmış CV-lər', locked: false },
+    { icon: Briefcase, label: 'Statuslar', sub: 'Şirkət statusları', locked: false },
+    { icon: Users, label: 'Əməkdaşlar', sub: `${collaborators.length} nəfər`, locked: false },
+    { icon: Award, label: 'Premium Elanlar', sub: 'Premium elanlar', locked: true },
+  ];
+
+  const jobseekerMenuItems = [
+    { icon: FileText, label: 'CV-lərim', sub: `${cvFiles.length} CV`, locked: false },
+    { icon: Briefcase, label: 'Müraciətlərim', sub: `${stats.applied} aktiv`, locked: false },
+    { icon: Bookmark, label: 'Seçilmişlər', sub: `${stats.saved} vakansiya`, locked: false },
+    { icon: Eye, label: 'Baxış Tarixçəsi', sub: `${stats.viewed} vakansiya`, locked: false },
+  ];
+
+  const menuItems = role === 'jobseeker' ? jobseekerMenuItems : employerMenuItems;
 
   return (
     <div className="space-y-4 pt-2">
@@ -856,7 +1048,7 @@ function ProfileTab({
       </div>
 
       {/* Post Creator */}
-      <div className="rounded-3xl bg-slate-900/60 border border-white/10 backdrop-blur-xl p-4 space-y-3 shadow-xl shadow-black/10">
+      <div className="rounded-3xl bg-slate-900/70 border border-white/15 backdrop-blur-xl p-4 space-y-3 shadow-xl shadow-black/10">
         <span className="text-xs font-bold text-cyan-200">Yeni Post / Məqalə Paylaş</span>
         <textarea
           rows={3}
@@ -865,23 +1057,39 @@ function ProfileTab({
           onChange={(e) => setPostText(e.target.value)}
           className="w-full bg-white/10 border border-white/15 rounded-2xl p-3 text-xs text-white placeholder-slate-300 focus:outline-none focus:border-cyan-400 transition-all resize-none backdrop-blur-xl"
         />
+        {postFileName && (
+          <div className="flex items-center justify-between bg-cyan-500/10 border border-cyan-400/20 rounded-xl px-3 py-2">
+            <span className="text-xs text-cyan-300 truncate">📎 {postFileName}</span>
+            <button
+              onClick={() => { setPostFileName(''); setPostFileType(''); }}
+              className="text-slate-400 hover:text-rose-400 transition-all flex-shrink-0"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
         <div className="flex justify-between items-center pt-1">
           <div className="flex space-x-2">
-            <button className="p-2 rounded-xl bg-white/10 border border-white/15 backdrop-blur-xl text-cyan-400 hover:bg-white/20 transition-all">
+            <button onClick={() => postImageRef.current?.click()} className="p-2 rounded-xl bg-white/10 border border-white/15 backdrop-blur-xl text-cyan-400 hover:bg-white/20 transition-all">
               <ImageIcon className="w-4 h-4" />
             </button>
-            <button className="p-2 rounded-xl bg-white/10 border border-white/15 backdrop-blur-xl text-cyan-400 hover:bg-white/20 transition-all">
+            <button onClick={() => postDocRef.current?.click()} className="p-2 rounded-xl bg-white/10 border border-white/15 backdrop-blur-xl text-cyan-400 hover:bg-white/20 transition-all">
               <Paperclip className="w-4 h-4" />
             </button>
           </div>
-          <button className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-400 to-blue-500 text-black font-extrabold text-xs hover:opacity-90 transition-all">
+          <button
+            onClick={onPublishPost}
+            disabled={!postText.trim() && !postFileName}
+            className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-400 to-blue-500 text-black font-extrabold text-xs hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          >
             Paylaş
           </button>
         </div>
       </div>
 
-      {/* Multi CV Uploader */}
-      <div className="rounded-3xl bg-slate-900/60 border border-white/10 backdrop-blur-xl p-4 space-y-3 shadow-xl shadow-black/10">
+      {/* Multi CV Uploader — jobseeker only */}
+      {role === 'jobseeker' && (
+      <div className="rounded-3xl bg-slate-900/70 border border-white/15 backdrop-blur-xl p-4 space-y-3 shadow-xl shadow-black/10">
         <div className="flex justify-between items-center">
           <span className="text-xs font-bold text-white">Mənim CV-lərim (Maks 5 ədəd)</span>
           <span className="text-[10px] text-cyan-300 font-semibold bg-cyan-500/10 px-2 py-0.5 rounded-lg border border-cyan-500/20">
@@ -897,7 +1105,7 @@ function ProfileTab({
             <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-400/20 flex items-center justify-center">
               <FileText className="w-6 h-6 text-cyan-400/60" />
             </div>
-            <p className="text-xs text-slate-400 font-medium text-center">Hələ heç bir CV yükleməmisiniz</p>
+            <p className="text-xs text-slate-300 font-medium text-center">Hələ heç bir CV yükleməmisiniz</p>
             <button
               onClick={handleAddCv}
               disabled={!user}
@@ -912,7 +1120,7 @@ function ProfileTab({
               <div key={file.id} className="flex items-center justify-between bg-white/10 border border-white/15 backdrop-blur-xl p-2.5 rounded-2xl text-xs">
                 <div className="flex items-center space-x-2">
                   <FileText className="w-4 h-4 text-cyan-400" />
-                  <span>{file.name}</span>
+                  <span className="text-white">{file.name}</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
@@ -935,33 +1143,99 @@ function ProfileTab({
           <button
             onClick={handleAddCv}
             disabled={cvFiles.length >= 5 || !user}
-            className="w-full py-2.5 rounded-2xl bg-white/10 border border-dashed border-white/25 backdrop-blur-xl text-xs font-semibold text-slate-200 hover:bg-white/15 transition-all flex items-center justify-center space-x-2 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full py-2.5 rounded-2xl bg-white/10 border border-dashed border-white/25 backdrop-blur-xl text-xs font-semibold text-slate-100 hover:bg-white/15 transition-all flex items-center justify-center space-x-2 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <PlusCircle className="w-4 h-4 text-cyan-400" />
             <span>Yeni CV / Sertifikat Yüklə</span>
           </button>
         )}
       </div>
+      )}
+
+      {/* Employer: Vacancy Management Tabs */}
+      {role === 'employer' && (
+        <div className="rounded-3xl bg-slate-900/70 border border-white/15 backdrop-blur-xl p-4 space-y-3 shadow-xl shadow-black/10">
+          <div className="flex gap-2 bg-white/5 border border-white/10 rounded-2xl p-1.5">
+            <button
+              onClick={() => setVacancyTab('active')}
+              className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                vacancyTab === 'active'
+                  ? 'bg-cyan-500/25 border border-cyan-400 text-cyan-200'
+                  : 'text-slate-400 border border-transparent hover:text-slate-200'
+              }`}
+            >
+              Aktiv Vakansiyalarım
+            </button>
+            <button
+              onClick={() => setVacancyTab('inactive')}
+              className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                vacancyTab === 'inactive'
+                  ? 'bg-cyan-500/25 border border-cyan-400 text-cyan-200'
+                  : 'text-slate-400 border border-transparent hover:text-slate-200'
+              }`}
+            >
+              Deaktiv Vakansiyalarım
+            </button>
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between bg-white/5 border border-white/10 rounded-2xl p-3">
+              <div className="flex-1">
+                <p className="text-xs text-slate-300">
+                  {vacancyTab === 'active'
+                    ? 'Aktiv vakansiyanı sonlandırın və ya avtomatik tarix seçin'
+                    : 'Deaktiv vakansiyanı aktiv edin və ya gələcək tarif seçin'}
+                </p>
+              </div>
+              {vacancyTab === 'active' ? (
+                <div className="flex gap-2 flex-shrink-0">
+                  <button className="px-3 py-1.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-[10px] font-bold hover:bg-rose-500/25 transition-all">
+                    Sonlandır
+                  </button>
+                  <label className="px-3 py-1.5 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 text-[10px] font-bold cursor-pointer hover:bg-cyan-500/25 transition-all flex items-center gap-1">
+                    <Calendar className="w-3 h-3" />
+                    <input type="datetime-local" className="hidden" />
+                    Tarix
+                  </label>
+                </div>
+              ) : (
+                <div className="flex gap-2 flex-shrink-0">
+                  <button className="px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[10px] font-bold hover:bg-emerald-500/25 transition-all">
+                    Aktiv et
+                  </button>
+                  <label className="px-3 py-1.5 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 text-[10px] font-bold cursor-pointer hover:bg-cyan-500/25 transition-all flex items-center gap-1">
+                    <Calendar className="w-3 h-3" />
+                    <input type="datetime-local" className="hidden" />
+                    Tarix
+                  </label>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center justify-center py-6">
+              <p className="text-xs text-slate-400">{vacancyTab === 'active' ? 'Aktiv' : 'Deaktiv'} vakansiya yoxdur</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Role Switch Card */}
-      <div className="rounded-2xl bg-slate-900/60 border border-white/10 p-4 space-y-2 backdrop-blur-xl shadow-lg shadow-black/5">
+      <div className="rounded-2xl bg-slate-900/70 border border-white/15 p-4 space-y-2 backdrop-blur-xl shadow-lg shadow-black/5">
         <div className="flex items-center space-x-2 pb-1">
           <Globe className="w-4 h-4 text-cyan-400" />
-          <p className="text-xs font-bold text-slate-200 tracking-wide">Rejim Dəyişdir</p>
+          <p className="text-xs font-bold text-slate-100 tracking-wide">Rejim Dəyişdir</p>
         </div>
         <div className="flex gap-2">
           <button
             onClick={() => setRole('jobseeker')}
-            className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${
-              role === 'jobseeker' ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 border' : 'bg-white/5 border border-white/10 text-slate-400'
+            className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all text-center ${
+              role === 'jobseeker' ? 'bg-cyan-500/20 border border-cyan-400 text-cyan-300' : 'bg-white/5 border border-white/10 text-slate-400'
             }`}
           >
             İş Axtaran
           </button>
           <button
             onClick={() => setRole('employer')}
-            className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${
-              role === 'employer' ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300 border' : 'bg-white/5 border border-white/10 text-slate-400'
+            className={`flex-1 py-3 rounded-xl text-xs font-bold transition-all text-center ${
+              role === 'employer' ? 'bg-cyan-500/20 border border-cyan-400 text-cyan-300' : 'bg-white/5 border border-white/10 text-slate-400'
             }`}
           >
             Şirkət Rejimi
@@ -970,7 +1244,7 @@ function ProfileTab({
       </div>
 
       {/* Menu Items */}
-      <div className="rounded-2xl bg-slate-900/60 border border-white/10 overflow-hidden backdrop-blur-xl shadow-lg shadow-black/5">
+      <div className="rounded-2xl bg-slate-900/70 border border-white/15 overflow-hidden backdrop-blur-xl shadow-lg shadow-black/5">
         {menuItems.map((item, i) => {
           const Icon = item.icon;
           return (
@@ -980,21 +1254,115 @@ function ProfileTab({
                 i < menuItems.length - 1 ? 'border-b border-white/10' : ''
               }`}
             >
-              <div className="w-9 h-9 rounded-xl bg-cyan-500/15 border border-cyan-400/25 flex items-center justify-center text-cyan-300">
-                <Icon className="w-4 h-4" />
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+                item.locked ? 'bg-amber-500/10 border border-amber-500/25 text-amber-400' : 'bg-cyan-500/15 border border-cyan-400/25 text-cyan-300'
+              }`}>
+                {item.locked ? <Lock className="w-4 h-4" /> : <Icon className="w-4 h-4" />}
               </div>
               <div className="flex-1">
                 <p className="text-sm font-semibold text-white">{item.label}</p>
-                <p className="text-[10px] text-slate-400">{item.sub}</p>
+                <p className="text-[10px] text-slate-300">{item.sub}</p>
               </div>
+              {item.locked && <Lock className="w-3.5 h-3.5 text-amber-400" />}
               <ChevronRight />
             </button>
           );
         })}
       </div>
 
+      {/* Employer: Custom sections with + button */}
+      {role === 'employer' && (
+        <div className="rounded-2xl bg-slate-900/70 border border-white/15 backdrop-blur-xl shadow-lg shadow-black/5 overflow-hidden">
+          {/* Collaborators management */}
+          {showAddCollab ? (
+            <div className="p-4 space-y-2 border-b border-white/10">
+              <input
+                type="text"
+                value={newCollabName}
+                onChange={(e) => setNewCollabName(e.target.value)}
+                placeholder="Əməkdaşın adı..."
+                className="w-full bg-white/10 border border-white/15 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-cyan-400 transition-all"
+              />
+              <div className="flex gap-2">
+                <button onClick={addCollaborator} className="flex-1 py-2 rounded-xl bg-cyan-500/20 border border-cyan-400 text-cyan-200 text-xs font-bold transition-all">Əlavə et</button>
+                <button onClick={() => setShowAddCollab(false)} className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-slate-300 text-xs font-bold transition-all">Ləğv et</button>
+              </div>
+            </div>
+          ) : null}
+          {collaborators.map((c) => (
+            <div key={c.id} className="flex items-center justify-between p-3.5 border-b border-white/10 hover:bg-white/[0.05] transition-all">
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 rounded-full bg-cyan-500/15 border border-cyan-400/25 flex items-center justify-center text-[10px] font-bold text-cyan-300">
+                  {c.name.slice(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-white">{c.name}</p>
+                  <p className="text-[10px] text-slate-300">{c.role}</p>
+                </div>
+              </div>
+              <button onClick={() => removeCollaborator(c.id)} className="text-slate-400 hover:text-rose-400 transition-all">
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+          {/* Custom dynamic sections */}
+          {customSections.map((section) => (
+            <div key={section.id} className="flex items-center justify-between p-3.5 border-b border-white/10 hover:bg-white/[0.05] transition-all">
+              <div className="flex items-center space-x-2 flex-1">
+                <button
+                  onClick={() => toggleSectionVisible(section.id)}
+                  className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${
+                    section.visible ? 'bg-cyan-500/20 border-cyan-400 text-cyan-300' : 'bg-white/5 border-white/15 text-transparent'
+                  }`}
+                >
+                  <Check className="w-3 h-3" />
+                </button>
+                <p className={`text-sm font-semibold ${section.visible ? 'text-white' : 'text-slate-500'}`}>{section.title}</p>
+              </div>
+              <button onClick={() => deleteSection(section.id)} className="text-slate-400 hover:text-rose-400 transition-all">
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+          {/* Add section / collaborator */}
+          {showAddSection ? (
+            <div className="p-4 space-y-2">
+              <input
+                type="text"
+                value={newSectionTitle}
+                onChange={(e) => setNewSectionTitle(e.target.value)}
+                placeholder="Bölmə başlığı yazın..."
+                className="w-full bg-white/10 border border-white/15 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-cyan-400 transition-all"
+              />
+              <div className="flex gap-2">
+                <button onClick={addCustomSection} className="flex-1 py-2 rounded-xl bg-cyan-500/20 border border-cyan-400 text-cyan-200 text-xs font-bold transition-all">Əlavə et</button>
+                <button onClick={() => setShowAddSection(false)} className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-slate-300 text-xs font-bold transition-all">Ləğv et</button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex border-t border-white/10">
+              <button
+                onClick={() => { setShowAddSection(true); setShowAddCollab(false); }}
+                className="flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-bold text-cyan-300 hover:bg-cyan-500/10 transition-all"
+              >
+                <Plus className="w-4 h-4" />
+                Yeni Bölmə
+              </button>
+              <div className="w-px bg-white/10" />
+              <button
+                onClick={() => { setShowAddCollab(true); setShowAddSection(false); }}
+                className="flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-bold text-cyan-300 hover:bg-cyan-500/10 transition-all"
+              >
+                <Plus className="w-4 h-4" />
+                Əməkdaş
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Settings & Logout */}
-      <div className="rounded-2xl bg-slate-900/60 border border-white/10 overflow-hidden backdrop-blur-xl shadow-lg shadow-black/5">
+      <div className="rounded-2xl bg-slate-900/70 border border-white/15 overflow-hidden backdrop-blur-xl shadow-lg shadow-black/5">
         <button className="w-full flex items-center space-x-3 p-4 hover:bg-white/[0.08] transition-all text-left border-b border-white/10">
           <div className="w-9 h-9 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center text-slate-200">
             <Settings className="w-4 h-4" />
@@ -1026,10 +1394,10 @@ function ProfileTab({
 
 function StatBox({ icon: Icon, value, label }: { icon: React.ElementType; value: number | string; label: string }) {
   return (
-    <div className="rounded-xl bg-slate-900/60 border border-white/10 backdrop-blur-xl p-2.5 text-center space-y-1">
+    <div className="rounded-xl bg-slate-900/70 border border-white/15 backdrop-blur-xl p-2.5 text-center space-y-1">
       <Icon className="w-4 h-4 text-cyan-400 mx-auto" />
       <p className="text-base font-extrabold text-white">{value}</p>
-      <p className="text-[9px] text-slate-400 font-medium uppercase tracking-wider">{label}</p>
+      <p className="text-[9px] text-slate-200 font-medium uppercase tracking-wider">{label}</p>
     </div>
   );
 }
