@@ -33,5 +33,9 @@ microsoftProvider.addScope('openid');
 microsoftProvider.addScope('email');
 microsoftProvider.addScope('profile');
 
-linkedInProvider.addScope('r_liteprofile');
-linkedInProvider.addScope('r_emailaddress');
+linkedInProvider.addScope('openid');
+linkedInProvider.addScope('profile');
+linkedInProvider.addScope('email');
+
+lineProvider.addScope('openid');
+lineProvider.addScope('profile');

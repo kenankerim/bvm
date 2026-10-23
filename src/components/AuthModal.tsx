@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { X, Mail, Lock, Eye, EyeOff, Loader2, ArrowRight, User, Phone } from 'lucide-react';
 import {
   firebaseAuth,
@@ -120,6 +120,23 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [busyProvider, setBusyProvider] = useState<string | null>(null);
 
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [onClose]);
+
+  const phoneDigits = phone.replace(/\D/g, '');
+  const submitOnEnter = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Enter' || e.nativeEvent.isComposing || e.keyCode === 229) return;
+    handleEmailAuth();
+  };
+
   const handleOAuth = async (provider: Provider) => {
     setAuthError(null);
     setBusyProvider(provider);
@@ -148,7 +165,13 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
       } else if (code === 'auth/cancelled-popup-request') {
         // user clicked another provider — ignore
       } else {
-        setAuthError('Giriş xətası baş verdi. Bir az sonra yenidən cəhd edin.');
+        setAuthError(
+          code === 'auth/operation-not-allowed'
+            ? 'Bu provayder Firebase konsolunda hələ aktiv edilməyib.'
+            : code === 'auth/account-exists-with-different-credential'
+              ? 'Bu e-poçt başqa giriş üsulu ilə qeydiyyatdadır.'
+              : 'Giriş xətası baş verdi. Bir az sonra yenidən cəhd edin.'
+        );
       }
       setBusyProvider(null);
     }
@@ -165,8 +188,8 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
         setAuthError('E-poçt tələb olunur.');
         return;
       }
-      if (authMethod === 'phone' && !phone.trim()) {
-        setAuthError('Telefon nömrəsi tələb olunur.');
+      if (authMethod === 'phone' && phoneDigits.length < 9) {
+        setAuthError('Düzgün telefon nömrəsi daxil edin.');
         return;
       }
       if (!password.trim()) {
@@ -182,7 +205,7 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
         setAuthError('E-poçt və şifrə tələb olunur.');
         return;
       }
-      if (authMethod === 'phone' && (!phone.trim() || !password.trim())) {
+      if (authMethod === 'phone' && (phoneDigits.length < 9 || !password.trim())) {
         setAuthError('Telefon nömrəsi və şifrə tələb olunur.');
         return;
       }
@@ -191,13 +214,14 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
     setBusy(true);
     try {
       const emailForAuth = authMethod === 'phone'
-        ? `${phone.replace(/[^0-9]/g, '')}@phone.bvm.az`
-        : email;
+        ? `${phoneDigits}@phone.bvm.az`
+        : email.trim();
       if (mode === 'login') {
         await signInWithEmailAndPassword(firebaseAuth, emailForAuth, password);
       } else {
         const cred = await createUserWithEmailAndPassword(firebaseAuth, emailForAuth, password);
         await updateProfile(cred.user, { displayName: fullName.trim() });
+        await cred.user.reload();
       }
       onClose();
     } catch (err: unknown) {
@@ -208,6 +232,8 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
         setAuthError('Bu istifadəçi artıq qeydiyyatdan keçib.');
       } else if (code === 'auth/weak-password') {
         setAuthError('Şifrə çox zəifdir. Ən azı 6 simvol istifadə edin.');
+      } else if (code === 'auth/operation-not-allowed') {
+        setAuthError('Bu giriş üsulu Firebase-də aktiv deyil.');
       } else if (code === 'auth/invalid-email') {
         setAuthError(authMethod === 'email' ? 'Yanlış e-poçt formatı.' : 'Yanlış telefon formatı.');
       } else {
@@ -221,20 +247,26 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
   const providers: Provider[] = ['google', 'apple', 'azure', 'linkedin', 'line'];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-md p-0 sm:p-4">
-      <div className="w-full max-w-md bg-slate-900/80 border border-white/15 rounded-t-3xl sm:rounded-3xl shadow-2xl shadow-black/50 backdrop-blur-2xl animate-slide-up max-h-[92vh] overflow-y-auto">
+    <div
+      className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-slate-950/80 backdrop-blur-xl p-0 sm:p-4"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="auth-title"
+    >
+      <div className="w-full max-w-md bg-slate-900/95 border border-white/15 rounded-t-3xl sm:rounded-3xl shadow-2xl shadow-black/50 backdrop-blur-2xl animate-slide-up max-h-[92vh] overflow-y-auto">
         {/* HEADER */}
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 px-6 py-4 bg-slate-900/80 backdrop-blur-2xl rounded-t-3xl">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 px-6 py-4 bg-slate-900 rounded-t-3xl">
           <div className="flex items-center space-x-2.5">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-400 via-blue-500 to-indigo-600 flex items-center justify-center font-black text-lg shadow-lg shadow-cyan-500/30 border border-white/20">
               B
             </div>
             <div>
-              <h2 className="text-base font-bold text-white tracking-tight">BVM Giriş</h2>
+              <h2 id="auth-title" className="text-base font-bold text-white tracking-tight">BVM Giriş</h2>
               <p className="text-[10px] text-cyan-300/80 font-medium tracking-wide uppercase">Karyera & İş</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 rounded-full bg-white/10 border border-white/15 text-slate-300 hover:text-white hover:bg-white/20 transition-all active:scale-95 backdrop-blur-xl">
+          <button onClick={onClose} aria-label="Bağla" className="p-2 rounded-full bg-white/10 border border-white/15 text-slate-300 hover:text-white hover:bg-white/20 transition-all active:scale-95 backdrop-blur-xl">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -274,7 +306,7 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
               }`}
             >
               <Phone className="w-3.5 h-3.5" />
-              Telefon ilə
+              Telefon Nömrəsi ilə
             </button>
           </div>
 
@@ -320,7 +352,7 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="Ad və Soyad"
-                  className="w-full bg-white/10 border border-white/15 rounded-2xl pl-10 pr-4 py-3 text-sm text-white placeholder-slate-400 backdrop-blur-xl focus:outline-none focus:border-cyan-400/80 transition-all"
+                  className="w-full bg-slate-800/90 border border-white/20 rounded-2xl pl-10 pr-4 py-3 text-sm text-white placeholder-slate-400 backdrop-blur-xl focus:outline-none focus:border-cyan-400/80 transition-all"
                 />
               </div>
             )}
@@ -333,7 +365,8 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="E-poçt ünvanı"
-                  className="w-full bg-white/10 border border-white/15 rounded-2xl pl-10 pr-4 py-3 text-sm text-white placeholder-slate-400 backdrop-blur-xl focus:outline-none focus:border-cyan-400/80 transition-all"
+                  autoComplete="email"
+                  className="w-full bg-slate-800/90 border border-white/20 rounded-2xl pl-10 pr-4 py-3 text-sm text-white placeholder-slate-400 backdrop-blur-xl focus:outline-none focus:border-cyan-400/80 transition-all"
                 />
               </div>
             ) : (
@@ -343,8 +376,9 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
                   type="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+995 50 123 45 67"
-                  className="w-full bg-white/10 border border-white/15 rounded-2xl pl-10 pr-4 py-3 text-sm text-white placeholder-slate-400 backdrop-blur-xl focus:outline-none focus:border-cyan-400/80 transition-all"
+                  placeholder="+994 50 123 45 67"
+                  autoComplete="tel"
+                  className="w-full bg-slate-800/90 border border-white/20 rounded-2xl pl-10 pr-4 py-3 text-sm text-white placeholder-slate-400 backdrop-blur-xl focus:outline-none focus:border-cyan-400/80 transition-all"
                 />
               </div>
             )}
@@ -355,11 +389,13 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleEmailAuth()}
+                onKeyDown={submitOnEnter}
                 placeholder="Şifrə"
-                className="w-full bg-white/10 border border-white/15 rounded-2xl pl-10 pr-11 py-3 text-sm text-white placeholder-slate-400 backdrop-blur-xl focus:outline-none focus:border-cyan-400/80 transition-all"
+                className="w-full bg-slate-800/90 border border-white/20 rounded-2xl pl-10 pr-11 py-3 text-sm text-white placeholder-slate-400 backdrop-blur-xl focus:outline-none focus:border-cyan-400/80 transition-all"
               />
               <button
+                type="button"
+                aria-label={showPassword ? 'Şifrəni gizlət' : 'Şifrəni göstər'}
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-all"
               >
@@ -374,15 +410,17 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
                   type={showConfirmPassword ? 'text' : 'password'}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleEmailAuth()}
+                  onKeyDown={submitOnEnter}
                   placeholder="Şifrənin təkrarı"
-                  className={`w-full bg-white/10 border rounded-2xl pl-10 pr-11 py-3 text-sm text-white placeholder-slate-400 backdrop-blur-xl focus:outline-none transition-all ${
+                  className={`w-full bg-slate-800/90 border rounded-2xl pl-10 pr-11 py-3 text-sm text-white placeholder-slate-400 backdrop-blur-xl focus:outline-none transition-all ${
                     confirmPassword && password !== confirmPassword
                       ? 'border-rose-500/60 focus:border-rose-500'
                       : 'border-white/15 focus:border-cyan-400/80'
                   }`}
                 />
                 <button
+                  type="button"
+                  aria-label={showConfirmPassword ? 'Şifrəni gizlət' : 'Şifrəni göstər'}
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                   className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-all"
                 >
