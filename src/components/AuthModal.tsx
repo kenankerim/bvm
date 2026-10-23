@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Mail, Lock, Eye, EyeOff, Loader2, ArrowRight, User } from 'lucide-react';
+import { X, Mail, Lock, Eye, EyeOff, Loader2, ArrowRight, User, Phone } from 'lucide-react';
 import {
   firebaseAuth,
   googleProvider,
@@ -11,7 +11,6 @@ import {
 import {
   signInWithPopup,
   signInWithRedirect,
-  getRedirectResult,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   updateProfile,
@@ -19,6 +18,7 @@ import {
 } from 'firebase/auth';
 
 type Provider = 'google' | 'apple' | 'azure' | 'linkedin' | 'line';
+type AuthMethod = 'email' | 'phone';
 
 const providerMap: Record<Provider, AuthProvider> = {
   google: googleProvider,
@@ -108,8 +108,10 @@ const providerIconColors: Record<Provider, string> = {
 
 export function AuthModal({ onClose }: { onClose: () => void }) {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [authMethod, setAuthMethod] = useState<AuthMethod>('email');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -154,39 +156,60 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
 
   const handleEmailAuth = async () => {
     setAuthError(null);
-    if (!email.trim() || !password.trim()) {
-      setAuthError('E-poçt və şifrə tələb olunur.');
-      return;
-    }
     if (mode === 'signup') {
       if (!fullName.trim()) {
         setAuthError('Ad və soyad tələb olunur.');
+        return;
+      }
+      if (authMethod === 'email' && !email.trim()) {
+        setAuthError('E-poçt tələb olunur.');
+        return;
+      }
+      if (authMethod === 'phone' && !phone.trim()) {
+        setAuthError('Telefon nömrəsi tələb olunur.');
+        return;
+      }
+      if (!password.trim()) {
+        setAuthError('Şifrə tələb olunur.');
         return;
       }
       if (password !== confirmPassword) {
         setAuthError('Şifrələr üst-üstə düşmür.');
         return;
       }
+    } else {
+      if (authMethod === 'email' && (!email.trim() || !password.trim())) {
+        setAuthError('E-poçt və şifrə tələb olunur.');
+        return;
+      }
+      if (authMethod === 'phone' && (!phone.trim() || !password.trim())) {
+        setAuthError('Telefon nömrəsi və şifrə tələb olunur.');
+        return;
+      }
     }
+
     setBusy(true);
     try {
+      const emailForAuth = authMethod === 'phone'
+        ? `${phone.replace(/[^0-9]/g, '')}@phone.bvm.az`
+        : email;
       if (mode === 'login') {
-        await signInWithEmailAndPassword(firebaseAuth, email, password);
+        await signInWithEmailAndPassword(firebaseAuth, emailForAuth, password);
       } else {
-        const cred = await createUserWithEmailAndPassword(firebaseAuth, email, password);
+        const cred = await createUserWithEmailAndPassword(firebaseAuth, emailForAuth, password);
         await updateProfile(cred.user, { displayName: fullName.trim() });
       }
       onClose();
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code ?? '';
       if (code === 'auth/invalid-credential' || code === 'auth/wrong-password') {
-        setAuthError('E-poçt və ya şifrə yanlışdır.');
+        setAuthError(authMethod === 'email' ? 'E-poçt və ya şifrə yanlışdır.' : 'Telefon və ya şifrə yanlışdır.');
       } else if (code === 'auth/email-already-in-use') {
-        setAuthError('Bu e-poçt artıq istifadə olunur.');
+        setAuthError('Bu istifadəçi artıq qeydiyyatdan keçib.');
       } else if (code === 'auth/weak-password') {
         setAuthError('Şifrə çox zəifdir. Ən azı 6 simvol istifadə edin.');
       } else if (code === 'auth/invalid-email') {
-        setAuthError('Yanlış e-poçt formatı.');
+        setAuthError(authMethod === 'email' ? 'Yanlış e-poçt formatı.' : 'Yanlış telefon formatı.');
       } else {
         setAuthError('Giriş xətası baş verdi.');
       }
@@ -198,10 +221,10 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
   const providers: Provider[] = ['google', 'apple', 'azure', 'linkedin', 'line'];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-2xl p-0 sm:p-4">
-      <div className="w-full max-w-md bg-slate-900/60 border border-white/10 rounded-t-3xl sm:rounded-3xl shadow-2xl shadow-black/30 backdrop-blur-xl animate-slide-up max-h-[92vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-md p-0 sm:p-4">
+      <div className="w-full max-w-md bg-slate-900/80 border border-white/15 rounded-t-3xl sm:rounded-3xl shadow-2xl shadow-black/50 backdrop-blur-2xl animate-slide-up max-h-[92vh] overflow-y-auto">
         {/* HEADER */}
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 px-6 py-4 bg-slate-900/60 backdrop-blur-xl rounded-t-3xl">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 px-6 py-4 bg-slate-900/80 backdrop-blur-2xl rounded-t-3xl">
           <div className="flex items-center space-x-2.5">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-400 via-blue-500 to-indigo-600 flex items-center justify-center font-black text-lg shadow-lg shadow-cyan-500/30 border border-white/20">
               B
@@ -216,7 +239,7 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        <div className="px-6 py-5 space-y-4">
+        <div className="px-6 py-5 space-y-4 pb-8" style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom))' }}>
           {/* WELCOME TEXT */}
           <div className="text-center space-y-1 pb-1">
             <h3 className="text-xl font-extrabold text-white tracking-tight">
@@ -227,6 +250,32 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
                 ? 'Davam etmək üçün daxil olun və ya qeydiyyatdan keçin'
                 : 'Bir dəqiqə içində pulsuz hesab yaradın'}
             </p>
+          </div>
+
+          {/* METHOD TABS: Email / Phone */}
+          <div className="flex gap-2 bg-white/5 border border-white/10 rounded-2xl p-1.5 backdrop-blur-xl">
+            <button
+              onClick={() => { setAuthMethod('email'); setAuthError(null); }}
+              className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                authMethod === 'email'
+                  ? 'bg-cyan-500/25 border border-cyan-400 text-cyan-200'
+                  : 'text-slate-400 border border-transparent hover:text-slate-200'
+              }`}
+            >
+              <Mail className="w-3.5 h-3.5" />
+              E-poçt ilə
+            </button>
+            <button
+              onClick={() => { setAuthMethod('phone'); setAuthError(null); }}
+              className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                authMethod === 'phone'
+                  ? 'bg-cyan-500/25 border border-cyan-400 text-cyan-200'
+                  : 'text-slate-400 border border-transparent hover:text-slate-200'
+              }`}
+            >
+              <Phone className="w-3.5 h-3.5" />
+              Telefon ilə
+            </button>
           </div>
 
           {/* SOCIAL BUTTONS */}
@@ -261,9 +310,8 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
             <div className="flex-1 h-px bg-white/10" />
           </div>
 
-          {/* EMAIL / PASSWORD FORM */}
+          {/* FORM */}
           <div className="space-y-3">
-            {/* Full Name — signup only */}
             {mode === 'signup' && (
               <div className="relative">
                 <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -276,16 +324,31 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
                 />
               </div>
             )}
-            <div className="relative">
-              <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="E-poçt ünvanı"
-                className="w-full bg-white/10 border border-white/15 rounded-2xl pl-10 pr-4 py-3 text-sm text-white placeholder-slate-400 backdrop-blur-xl focus:outline-none focus:border-cyan-400/80 transition-all"
-              />
-            </div>
+
+            {authMethod === 'email' ? (
+              <div className="relative">
+                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="E-poçt ünvanı"
+                  className="w-full bg-white/10 border border-white/15 rounded-2xl pl-10 pr-4 py-3 text-sm text-white placeholder-slate-400 backdrop-blur-xl focus:outline-none focus:border-cyan-400/80 transition-all"
+                />
+              </div>
+            ) : (
+              <div className="relative">
+                <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+995 50 123 45 67"
+                  className="w-full bg-white/10 border border-white/15 rounded-2xl pl-10 pr-4 py-3 text-sm text-white placeholder-slate-400 backdrop-blur-xl focus:outline-none focus:border-cyan-400/80 transition-all"
+                />
+              </div>
+            )}
+
             <div className="relative">
               <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
@@ -303,7 +366,7 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
-            {/* Confirm Password — signup only */}
+
             {mode === 'signup' && (
               <div className="relative">
                 <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -365,7 +428,7 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* FOOTER */}
-        <div className="px-6 py-3 border-t border-white/10 text-center">
+        <div className="px-6 py-3 border-t border-white/10 text-center" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
           <p className="text-[10px] text-slate-400">
             Davam edərək BVM İstifadəçi Şərtləri və Məxfilik Siyasətini qəbul edirsiniz
           </p>
