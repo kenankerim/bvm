@@ -11,6 +11,9 @@ import { supabase, type Company, type Vacancy, type Article, type FeedItem } fro
 import { firebaseAuth, type FirebaseUser } from './lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { AuthModal } from './components/AuthModal';
+import { SettingsModal } from './components/SettingsModal';
+import { AIAssistant } from './components/AIAssistant';
+import { uploadToCloudinary } from './lib/cloudinary';
 
 type SortBy = 'newest' | 'salary' | 'alphabetical';
 
@@ -19,6 +22,7 @@ export default function App() {
   const [role, setRole] = useState<'jobseeker' | 'employer'>('jobseeker');
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -269,11 +273,14 @@ export default function App() {
     const file = e.target.files?.[0];
     if (!file || !user) return;
     e.target.value = '';
+    if (file.type.startsWith('video/')) return;
     const lang = cvLanguage;
     try {
+      const cloudUrl = await uploadToCloudinary(file);
+      const fileName = cloudUrl || file.name;
       const { data, error } = await supabase
         .from('cvs')
-        .insert({ firebase_uid: user.uid, file_name: file.name, lang })
+        .insert({ firebase_uid: user.uid, file_name: fileName, lang })
         .select('id, file_name, lang')
         .single();
       if (error) return;
@@ -324,10 +331,13 @@ export default function App() {
     if (!file || !user) return;
     e.target.value = '';
     if (file.type.startsWith('video/')) return;
-    const url = URL.createObjectURL(file);
-    setAvatarUrl(url);
+    const localUrl = URL.createObjectURL(file);
+    setAvatarUrl(localUrl);
     try {
-      await supabase.from('profile_photos').upsert({ firebase_uid: user.uid, avatar_url: url }, { onConflict: 'firebase_uid' });
+      const cloudUrl = await uploadToCloudinary(file);
+      const finalUrl = cloudUrl || localUrl;
+      if (cloudUrl) setAvatarUrl(cloudUrl);
+      await supabase.from('profile_photos').upsert({ firebase_uid: user.uid, avatar_url: finalUrl }, { onConflict: 'firebase_uid' });
     } catch {
       // ignore
     }
@@ -338,10 +348,13 @@ export default function App() {
     if (!file || !user) return;
     e.target.value = '';
     if (file.type.startsWith('video/')) return;
-    const url = URL.createObjectURL(file);
-    setCoverUrl(url);
+    const localUrl = URL.createObjectURL(file);
+    setCoverUrl(localUrl);
     try {
-      await supabase.from('profile_photos').upsert({ firebase_uid: user.uid, cover_url: url }, { onConflict: 'firebase_uid' });
+      const cloudUrl = await uploadToCloudinary(file);
+      const finalUrl = cloudUrl || localUrl;
+      if (cloudUrl) setCoverUrl(cloudUrl);
+      await supabase.from('profile_photos').upsert({ firebase_uid: user.uid, cover_url: finalUrl }, { onConflict: 'firebase_uid' });
     } catch {
       // ignore
     }
@@ -380,6 +393,12 @@ export default function App() {
               }`}
             >
               {notificationsOn ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
+            </button>
+            <button
+              onClick={() => setShowSettingsModal(true)}
+              className="p-2 rounded-full bg-white/10 border border-white/15 text-slate-200 hover:text-cyan-400 hover:bg-cyan-500/15 transition-all active:scale-95 backdrop-blur-xl"
+            >
+              <Settings className="w-4 h-4" />
             </button>
             <button
               onClick={() => setRole(role === 'jobseeker' ? 'employer' : 'jobseeker')}
@@ -485,6 +504,14 @@ export default function App() {
       {showAuthModal && (
         <AuthModal onClose={() => setShowAuthModal(false)} />
       )}
+
+      {/* SETTINGS MODAL */}
+      {showSettingsModal && (
+        <SettingsModal onClose={() => setShowSettingsModal(false)} user={user} />
+      )}
+
+      {/* AI ASSISTANT WIDGET */}
+      <AIAssistant />
 
       {/* BOTTOM NAV */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 backdrop-blur-md bg-slate-900/60 border-t border-white/10 py-2.5 shadow-lg shadow-black/20">
