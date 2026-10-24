@@ -3,7 +3,8 @@ import { X, Send, MessageCircle, Loader2, Bot } from 'lucide-react';
 
 type ChatMsg = { role: 'user' | 'model'; text: string };
 
-const GEMINI_KEY = import.meta.env.VITE_GEMINI_API_KEY as string || '';
+const DEEPSEEK_KEY = import.meta.env.VITE_DEEPSEEK_API_KEY as string || '';
+const DEEPSEEK_URL = 'https://api.deepseek.com/chat/completions';
 
 const SYSTEM_PROMPT = `Sən "BVM Asistent"sən — Azərbaycanın karyera və iş portalı olan BVM-in AI köməkçisisən. Sənin vəzifən istifadəçilərə CV hazırlamaqda, vakansiya axtarışında, müsahibə hazırlığında və tətbiqin istifadə qaydalarında kömək etməkdir. Qısa, aydın və faydalı cavablar ver. Azərbaycan dilində yaz.`;
 
@@ -53,15 +54,26 @@ export function AIAssistant() {
     setMessages((prev) => [...prev, { role: 'user', text }]);
     setLoading(true);
     try {
-      const history = [...messages, { role: 'user' as const, text }].map((m) => ({ role: m.role, parts: [{ text: m.text }] }));
-      if (GEMINI_KEY) {
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`, {
+      if (DEEPSEEK_KEY) {
+        const history = [...messages, { role: 'user' as const, text }].map((message) => ({
+          role: message.role === 'model' ? 'assistant' : 'user',
+          content: message.text,
+        }));
+        const res = await fetch(DEEPSEEK_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] }, contents: history }),
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${DEEPSEEK_KEY}`,
+          },
+          body: JSON.stringify({
+            model: 'deepseek-chat',
+            messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...history],
+          }),
         });
+        if (!res.ok) throw new Error(`DeepSeek request failed (${res.status})`);
         const data = await res.json();
-        const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Bağışlayın, cavab tapılmadı.';
+        const reply = data?.choices?.[0]?.message?.content;
+        if (typeof reply !== 'string' || !reply.trim()) throw new Error('DeepSeek returned an empty response');
         setMessages((prev) => [...prev, { role: 'model', text: reply }]);
       } else {
         setMessages((prev) => [...prev, { role: 'model', text: 'AI asistent hələ konfiqurasiya olunmayıb. Administrator ilə əlaqə saxlayın.' }]);
@@ -103,7 +115,17 @@ export function AIAssistant() {
             <div className={`max-w-[85%] px-3 py-2 rounded-2xl text-xs leading-relaxed ${msg.role === 'user' ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-br-md' : 'bg-slate-800/80 border border-red-500/15 text-slate-200 rounded-bl-md'}`}>{msg.text}</div>
           </div>
         ))}
-        {loading && <div className="flex justify-start"><div className="bg-slate-800/80 border border-red-500/15 rounded-2xl rounded-bl-md px-3 py-2.5"><Loader2 className="w-4 h-4 animate-spin text-red-400" /></div></div>}
+        {loading && (
+          <div className="flex justify-start animate-fade-in-up" role="status" aria-live="polite">
+            <div className="flex items-center gap-2 bg-slate-800/80 border border-red-500/15 rounded-2xl rounded-bl-md px-3 py-2.5 text-xs text-slate-300">
+              <Loader2 className="w-4 h-4 animate-spin text-red-400" />
+              <span>Cavab hazırlanır</span>
+              <span className="flex gap-0.5" aria-hidden="true">
+                <span className="animate-pulse">.</span><span className="animate-pulse [animation-delay:150ms]">.</span><span className="animate-pulse [animation-delay:300ms]">.</span>
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="border-t border-red-500/15 p-2.5 flex items-center gap-2 bg-slate-900/80">
@@ -112,4 +134,4 @@ export function AIAssistant() {
       </div>
     </div>
   );
-                            }
+}

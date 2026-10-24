@@ -93,6 +93,35 @@ export default function App() {
   // Profile photo state
   const [avatarUrl, setAvatarUrl] = useState('');
   const [coverUrl, setCoverUrl] = useState('');
+  const [profilePhotoError, setProfilePhotoError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    setProfilePhotoError('');
+    if (!user) {
+      setAvatarUrl('');
+      setCoverUrl('');
+      return;
+    }
+
+    const loadProfilePhotos = async () => {
+      const { data, error } = await supabase
+        .from('profile_photos')
+        .select('avatar_url, cover_url')
+        .eq('firebase_uid', user.uid)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error) {
+        setProfilePhotoError('Profil şəkillərini yükləmək mümkün olmadı.');
+        return;
+      }
+      setAvatarUrl(data?.avatar_url || '');
+      setCoverUrl(data?.cover_url || '');
+    };
+
+    void loadProfilePhotos();
+    return () => { cancelled = true; };
+  }, [user]);
 
   useEffect(() => {
     localStorage.setItem('bvm_favorites', JSON.stringify(favorites));
@@ -330,16 +359,18 @@ export default function App() {
     const file = e.target.files?.[0];
     if (!file || !user) return;
     e.target.value = '';
-    if (file.type.startsWith('video/')) return;
+    if (!file.type.startsWith('image/')) return;
+    setProfilePhotoError('');
     const localUrl = URL.createObjectURL(file);
     setAvatarUrl(localUrl);
     try {
       const cloudUrl = await uploadToCloudinary(file);
       const finalUrl = cloudUrl || localUrl;
       if (cloudUrl) setAvatarUrl(cloudUrl);
-      await supabase.from('profile_photos').upsert({ firebase_uid: user.uid, avatar_url: finalUrl }, { onConflict: 'firebase_uid' });
+      const { error } = await supabase.from('profile_photos').upsert({ firebase_uid: user.uid, avatar_url: finalUrl }, { onConflict: 'firebase_uid' });
+      if (error) throw error;
     } catch {
-      // ignore
+      setProfilePhotoError('Profil şəklini yadda saxlamaq mümkün olmadı.');
     }
   };
 
@@ -347,16 +378,32 @@ export default function App() {
     const file = e.target.files?.[0];
     if (!file || !user) return;
     e.target.value = '';
-    if (file.type.startsWith('video/')) return;
+    if (!file.type.startsWith('image/')) return;
+    setProfilePhotoError('');
     const localUrl = URL.createObjectURL(file);
     setCoverUrl(localUrl);
     try {
       const cloudUrl = await uploadToCloudinary(file);
       const finalUrl = cloudUrl || localUrl;
       if (cloudUrl) setCoverUrl(cloudUrl);
-      await supabase.from('profile_photos').upsert({ firebase_uid: user.uid, cover_url: finalUrl }, { onConflict: 'firebase_uid' });
+      const { error } = await supabase.from('profile_photos').upsert({ firebase_uid: user.uid, cover_url: finalUrl }, { onConflict: 'firebase_uid' });
+      if (error) throw error;
     } catch {
-      // ignore
+      setProfilePhotoError('Üz qabığı şəklini yadda saxlamaq mümkün olmadı.');
+    }
+  };
+
+  const saveProfilePhotoPreset = async (kind: 'avatar' | 'cover', url: string) => {
+    if (!user) return;
+    setProfilePhotoError('');
+    if (kind === 'avatar') setAvatarUrl(url);
+    else setCoverUrl(url);
+    const photoField = kind === 'avatar' ? 'avatar_url' : 'cover_url';
+    const { error } = await supabase
+      .from('profile_photos')
+      .upsert({ firebase_uid: user.uid, [photoField]: url }, { onConflict: 'firebase_uid' });
+    if (error) {
+      setProfilePhotoError('Seçilmiş şəkli yadda saxlamaq mümkün olmadı.');
     }
   };
 
@@ -472,6 +519,9 @@ export default function App() {
             onCoverSelected={handleCoverSelected}
             avatarUrl={avatarUrl}
             coverUrl={coverUrl}
+            onAvatarPreset={(url) => saveProfilePhotoPreset('avatar', url)}
+            onCoverPreset={(url) => saveProfilePhotoPreset('cover', url)}
+            profilePhotoError={profilePhotoError}
           />
         )}
       </main>
@@ -896,7 +946,7 @@ function ProfileTab({
   cvLoading, user, authLoading, onShowAuth, fileInputRef, onFileSelected, cvLanguage,
   postImageRef, postDocRef, onPostImage, onPostDoc, postFileName, setPostFileName,
   setPostFileType, onPublishPost, avatarInputRef, coverInputRef, onAvatarSelected,
-  onCoverSelected, avatarUrl, coverUrl,
+  onCoverSelected, avatarUrl, coverUrl, onAvatarPreset, onCoverPreset, profilePhotoError,
 }: {
   role: 'jobseeker' | 'employer';
   setRole: (r: 'jobseeker' | 'employer') => void;
@@ -926,6 +976,9 @@ function ProfileTab({
   onCoverSelected: (e: React.ChangeEvent<HTMLInputElement>) => void;
   avatarUrl: string;
   coverUrl: string;
+  onAvatarPreset: (url: string) => void;
+  onCoverPreset: (url: string) => void;
+  profilePhotoError: string;
 }) {
   const [stats, setStats] = useState({ applied: 0, saved: 0, viewed: 0 });
   const [vacancyTab, setVacancyTab] = useState<'active' | 'inactive'>('active');
@@ -1027,20 +1080,55 @@ function ProfileTab({
   ];
 
   const menuItems = role === 'jobseeker' ? jobseekerMenuItems : employerMenuItems;
+  const photoPresets = [
+    { name: 'Səma', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=160&h=160&q=80', cover: 'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=900&h=320&q=80' },
+    { name: 'Təbiət', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=160&h=160&q=80', cover: 'https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&w=900&h=320&q=80' },
+    { name: 'Dağlar', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=160&h=160&q=80', cover: 'https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=900&h=320&q=80' },
+  ];
 
   return (
     <div className="space-y-4 pt-2">
       {/* Profile Header Card */}
       <div className="rounded-3xl bg-slate-900/60 border border-white/10 p-5 space-y-4 backdrop-blur-xl shadow-xl shadow-black/10">
-        <div className="flex items-center space-x-4">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-cyan-500 via-blue-600 to-indigo-600 flex items-center justify-center text-2xl font-black border border-white/20 shadow-lg">
-            {role === 'jobseeker' ? 'İA' : 'ŞP'}
+        <div className="relative h-24 -mx-1 -mt-1 overflow-hidden rounded-2xl bg-gradient-to-r from-cyan-700 via-blue-700 to-indigo-800">
+          {coverUrl && <img src={coverUrl} alt="Üz qabığı" className="absolute inset-0 h-full w-full object-cover" />}
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/60 to-transparent" />
+          <button
+            type="button"
+            onClick={() => coverInputRef.current?.click()}
+            disabled={!user}
+            aria-label="Üz qabığı şəklini dəyiş"
+            className="absolute bottom-2 right-2 flex items-center gap-1.5 rounded-xl border border-white/20 bg-slate-950/70 px-2.5 py-1.5 text-[10px] font-semibold text-white backdrop-blur transition hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <ImageIcon className="h-3.5 w-3.5" /> Üz qabığını dəyiş
+          </button>
+          <input ref={coverInputRef} type="file" accept="image/*" onChange={onCoverSelected} className="hidden" />
+        </div>
+        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+          <div className="relative h-16 w-16 flex-shrink-0">
+            <div className="h-16 w-16 overflow-hidden rounded-2xl border border-white/20 bg-gradient-to-tr from-cyan-500 via-blue-600 to-indigo-600 shadow-lg">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="Profil şəkli" className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-2xl font-black">{initials}</div>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => avatarInputRef.current?.click()}
+              disabled={!user}
+              aria-label="Profil şəklini dəyiş"
+              className="absolute -bottom-1 -right-1 rounded-lg border border-white/20 bg-slate-800 p-1.5 text-cyan-300 shadow transition hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <ImageIcon className="h-3 w-3" />
+            </button>
+            <input ref={avatarInputRef} type="file" accept="image/*" onChange={onAvatarSelected} className="hidden" />
           </div>
-          <div className="flex-1">
-            <h2 className="text-lg font-bold tracking-tight">
+          <div className="min-w-0 flex-1">
+            <h2 className="break-words text-lg font-bold leading-snug tracking-tight">
               {user ? (user.displayName || user.email || 'İstifadəçi') : (role === 'jobseeker' ? 'İş Axtaran İstifadəçi' : 'Şirkət Profili')}
             </h2>
-            <p className="text-xs text-slate-400">
+            <p className="break-all text-xs text-slate-400">
               {user ? user.email : (role === 'jobseeker' ? 'email@example.com' : 'sirket@example.com')}
             </p>
             <div className="flex items-center gap-1.5 mt-1.5">
@@ -1056,6 +1144,37 @@ function ProfileTab({
               )}
             </div>
           </div>
+        </div>
+        <div className="space-y-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Hazır şəkillər</p>
+          <div className="grid grid-cols-3 gap-2">
+            {photoPresets.map((preset) => (
+              <div key={preset.name} className="min-w-0 rounded-xl border border-white/10 bg-white/5 p-1.5">
+                <span className="block truncate px-1 pb-1 text-[9px] text-slate-300">{preset.name}</span>
+                <div className="flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onAvatarPreset(preset.avatar)}
+                    disabled={!user}
+                    aria-label={`${preset.name} profil şəklini seç`}
+                    className="h-8 w-8 flex-shrink-0 overflow-hidden rounded-lg border border-white/20 disabled:opacity-50"
+                  >
+                    <img src={preset.avatar} alt="" className="h-full w-full object-cover" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onCoverPreset(preset.cover)}
+                    disabled={!user}
+                    aria-label={`${preset.name} üz qabığını seç`}
+                    className="h-8 min-w-0 flex-1 overflow-hidden rounded-lg border border-white/20 disabled:opacity-50"
+                  >
+                    <img src={preset.cover} alt="" className="h-full w-full object-cover" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+          {profilePhotoError && <p role="alert" className="text-[10px] text-rose-300">{profilePhotoError}</p>}
         </div>
         <div className="grid grid-cols-3 gap-2">
           {role === 'jobseeker' ? (

@@ -109,7 +109,8 @@ const providerIconColors: Record<Provider, string> = {
 export function AuthModal({ onClose }: { onClose: () => void }) {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [authMethod, setAuthMethod] = useState<AuthMethod>('email');
-  const [fullName, setFullName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -157,8 +158,8 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
   const handleEmailAuth = async () => {
     setAuthError(null);
     if (mode === 'signup') {
-      if (!fullName.trim()) {
-        setAuthError('Ad və soyad tələb olunur.');
+      if (!firstName.trim()) {
+        setAuthError('Ad tələb olunur.');
         return;
       }
       if (authMethod === 'email' && !email.trim()) {
@@ -171,6 +172,10 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
       }
       if (!password.trim()) {
         setAuthError('Şifrə tələb olunur.');
+        return;
+      }
+      if (password.length < 8 || !/[A-Z]/.test(password) || !/[0-9]/.test(password)) {
+        setAuthError('Şifrə bütün təhlükəsizlik qaydalarına uyğun olmalıdır.');
         return;
       }
       if (password !== confirmPassword) {
@@ -197,7 +202,7 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
         await signInWithEmailAndPassword(firebaseAuth, emailForAuth, password);
       } else {
         const cred = await createUserWithEmailAndPassword(firebaseAuth, emailForAuth, password);
-        await updateProfile(cred.user, { displayName: fullName.trim() });
+        await updateProfile(cred.user, { displayName: [firstName.trim(), lastName.trim()].filter(Boolean).join(' ') });
       }
       onClose();
     } catch (err: unknown) {
@@ -207,7 +212,7 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
       } else if (code === 'auth/email-already-in-use') {
         setAuthError('Bu istifadəçi artıq qeydiyyatdan keçib.');
       } else if (code === 'auth/weak-password') {
-        setAuthError('Şifrə çox zəifdir. Ən azı 6 simvol istifadə edin.');
+        setAuthError('Şifrə çox zəifdir. Ən azı 8 simvol, bir böyük hərf və bir rəqəm istifadə edin.');
       } else if (code === 'auth/invalid-email') {
         setAuthError(authMethod === 'email' ? 'Yanlış e-poçt formatı.' : 'Yanlış telefon formatı.');
       } else {
@@ -313,16 +318,30 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
           {/* FORM */}
           <div className="space-y-3">
             {mode === 'signup' && (
-              <div className="relative">
-                <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input
-                  type="text"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Ad və Soyad"
-                  className="w-full bg-white/10 border border-white/15 rounded-2xl pl-10 pr-4 py-3 text-sm text-white placeholder-slate-400 backdrop-blur-xl focus:outline-none focus:border-cyan-400/80 transition-all"
-                />
-              </div>
+              <>
+                <div className="relative">
+                  <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    placeholder="Ad"
+                    autoComplete="given-name"
+                    className="w-full bg-white/10 border border-white/15 rounded-2xl pl-10 pr-4 py-3 text-sm text-white placeholder-slate-400 backdrop-blur-xl focus:outline-none focus:border-cyan-400/80 transition-all"
+                  />
+                </div>
+                <div className="relative">
+                  <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    placeholder="Soyad (istəyə bağlı)"
+                    autoComplete="family-name"
+                    className="w-full bg-white/10 border border-white/15 rounded-2xl pl-10 pr-4 py-3 text-sm text-white placeholder-slate-400 backdrop-blur-xl focus:outline-none focus:border-cyan-400/80 transition-all"
+                  />
+                </div>
+              </>
             )}
 
             {authMethod === 'email' ? (
@@ -366,6 +385,20 @@ export function AuthModal({ onClose }: { onClose: () => void }) {
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
+
+            {mode === 'signup' && (
+              <ul className="space-y-1 px-1 text-[11px]" aria-live="polite">
+                {[
+                  { label: 'Ən azı 8 simvol', valid: password.length >= 8 },
+                  { label: 'Ən azı 1 böyük hərf', valid: /[A-Z]/.test(password) },
+                  { label: 'Ən azı 1 rəqəm', valid: /[0-9]/.test(password) },
+                ].map((rule) => (
+                  <li key={rule.label} className={rule.valid ? 'text-emerald-400 line-through' : 'text-slate-400'}>
+                    {rule.valid ? '✓' : '•'} {rule.label}
+                  </li>
+                ))}
+              </ul>
+            )}
 
             {mode === 'signup' && (
               <div className="relative">
