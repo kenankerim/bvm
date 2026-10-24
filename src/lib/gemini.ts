@@ -1,0 +1,44 @@
+export async function askGemini(prompt: string): Promise<string> {
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY || "";
+
+  if (!apiKey) {
+    console.error("VITE_GEMINI_API_KEY bulunamadı!");
+    return "AI asistent hələ konfiqurasiya olunmayıb. API key tapılmadı.";
+  }
+
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [{ text: prompt }],
+            },
+          ],
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (data.error) {
+      console.error("Gemini API Error Detail:", data.error);
+      return `API Xətası: ${data.error.message || "Cavab alınamadı"}`;
+    }
+
+    if (data.candidates && data.candidates[0]?.content?.parts[0]?.text) {
+      return data.candidates[0].content.parts[0].text;
+    } else {
+      console.error("Gemini Response Format Error:", data);
+      return "Üzr istəyirəm, cavab hazırlana bilmədi. Zəhmət olmasa yenidən yazın.";
+    }
+  } catch (error) {
+    console.error("Gemini Network Error:", error);
+    return "Şəbəkə xətası baş verdi, xahiş edirik yenidən cəhd edin.";
+  }
+  }
